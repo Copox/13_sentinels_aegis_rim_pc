@@ -1,0 +1,12 @@
+{
+  "license": "GPL-2.0-or-later",
+  "prompt_en": "Use case: stylized-concept. Asset type: original wide 16:9 background illustration for an open-source PC game runtime launcher. Create an entirely original, polished science-fiction landscape, not fan art or a recreation of any existing game. A tranquil futuristic coastal observatory at blue hour, an immense slender luminous orbital arc rising beyond a distant abstract city skyline on the right, softly glowing amber light near the horizon, atmospheric layered indigo and teal clouds, refined painterly digital environment art, subtle paper grain, cinematic architectural perspective. Composition is crucial: left 60 percent and upper left are calm dark navy negative space for a launcher title and settings panel; visual interest and the orbital arc concentrated in the right 35 percent; bottom right darker for an orange launch button. Premium sophisticated launcher art, restrained cyan and warm gold accents. No people, no robots or mecha, no characters, no uniforms, no school classroom, no recognizable existing fictional architecture, no game screenshots, no logos, no trademark symbols, no lettering, no text, no watermark. Wide landscape, edge-to-edge, crisp detailed original illustration.",
+  "prompt_zh": "用途：原创风格化科幻概念图；素材：开源 PC 游戏运行时启动器的宽屏 16:9 背景。画面必须完全原创，不是任何现有游戏的同人或复刻。蓝调时刻宁静的未来海岸观测站，右侧远方抽象城市天际线上方升起巨大纤细的发光轨道弧线，地平线附近柔和的琥珀色光，分层的靛蓝与青色云雾，精致的数字环境绘画，细微纸张颗粒，具有电影感的建筑透视。构图要求：左侧 60% 和左上方保留平静的深蓝负空间供标题和设置面板使用；主要视觉和轨道弧线集中在右侧 35%；右下方较暗以衬托橙色启动按钮。克制的青色和暖金色点缀，画面精细、成熟。不要人物、机器人或机甲、角色、制服、学校教室、可辨认的现有虚构建筑、游戏截图、标志、商标、字母、文字或水印。横向满幅原创插画。",
+  "origin_en": "Original project background generated using the built-in OpenAI image generation tool. Original geometric icon drawn for this project. No game imagery used.",
+  "origin_zh": "背景由内置 OpenAI 图像生成工具为本项目原创生成，几何图标为本项目原创绘制，未使用游戏图像。",
+  "files": {
+    "launcher-background.png": "cd65b792491525a8d4a51088d7409d2352f2a9ac84a0d525736ffce270b3aaa2",
+    "icon.png": "1e8c7cc3d4e84908678fc180790df30123289fff2152ffc140b0c8f33f31255b",
+    "icon.svg": "9f38f49bbd1ed3a1d8c2a7b387a9a1106952228cc9077d1d168feecfaac98635"
+  }
+}

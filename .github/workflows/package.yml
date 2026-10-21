@@ -1,0 +1,96 @@
+name: Build packages / 构建运行包
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: ${{ matrix.platform }} / 打包
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, windows]
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      AEGIS_BUILD_JOBS: '2'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - name: Bootstrap tools / 安装基础工具
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git
+      - name: Checkout sources / 检出源码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install dependencies / 安装编译依赖
+        run: |
+          apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config \
+            python3 python3-pil libsdl3-dev libvulkan-dev libvulkan-memory-allocator-dev \
+            libfmt-dev libboost-dev libzydis-dev robin-map-dev libxbyak-dev libxxhash-dev \
+            libx11-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+            libswresample-dev glslang-tools clang-19 lld-19 \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            binutils-mingw-w64-x86-64 zstd xz-utils
+      - name: Rust toolchain / Rust 工具链
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.85.1
+          targets: x86_64-pc-windows-gnu
+      - name: Cache dependencies / 缓存依赖
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .deps
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: deps-debian13-${{ matrix.platform }}-${{ hashFiles('packaging/windows/msys2.lock.json', 'tools/pkg-import/Cargo.lock', 'scripts/aegis_build*.sh', 'cmake/windows-mingw.cmake') }}
+      - name: Build Linux / 编译 Linux
+        if: matrix.platform == 'linux'
+        run: |
+          bash scripts/aegis_build.sh
+          python3 scripts/aegis_package_linux.py --out dist/aegis-linux
+      - name: Build Windows / 编译 Windows
+        if: matrix.platform == 'windows'
+        run: |
+          export PATH=/usr/lib/llvm-19/bin:$PATH
+          bash scripts/aegis_build_windows.sh
+          curl --fail --location --retry 3 \
+            https://www.python.org/ftp/python/3.13.8/python-3.13.8-embed-amd64.zip \
+            --output "$RUNNER_TEMP/python-embed.zip"
+          python3 scripts/aegis_package_windows.py --prefix .deps/windows/mingw64 \
+            --python-zip "$RUNNER_TEMP/python-embed.zip" --out dist/aegis-windows
+      - name: Package checksums / 生成包哈希
+        run: |
+          if [ '${{ matrix.platform }}' = windows ]; then
+            sha256sum dist/aegis-windows.zip > dist/SHA256SUMS-windows.txt
+          else
+            sha256sum dist/aegis-linux.tar.gz > dist/SHA256SUMS-linux.txt
+          fi
+      - name: Upload package / 上传运行包
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aegis-${{ matrix.platform }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS-*.txt
+          if-no-files-found: error
+          retention-days: 30

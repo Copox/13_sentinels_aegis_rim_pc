@@ -1,0 +1,57 @@
+[
+  {
+    "name": "mingw-w64-x86_64-fmt",
+    "file": "mingw-w64-x86_64-fmt-12.2.0-1-any.pkg.tar.zst",
+    "sha256": "c2b1cdcc8589b0d3022f5a336e9bce400e87b1bb36b93c91512c0e8e83f90eef"
+  },
+  {
+    "name": "mingw-w64-x86_64-sdl3",
+    "file": "mingw-w64-x86_64-sdl3-3.4.18-1-any.pkg.tar.zst",
+    "sha256": "f2b7d6278bb880675ab4ea9a0274e73617d7314840d9af090835cd9877bdc271"
+  },
+  {
+    "name": "mingw-w64-x86_64-robin-map",
+    "file": "mingw-w64-x86_64-robin-map-1.4.1-1-any.pkg.tar.zst",
+    "sha256": "90267a61344c7a1dcc3fd43010699c5194176e718a24ee22e3b17cd0ffd9dffa"
+  },
+  {
+    "name": "mingw-w64-x86_64-xxhash",
+    "file": "mingw-w64-x86_64-xxhash-0.8.4-1-any.pkg.tar.zst",
+    "sha256": "ebedfe755c51f6485f8bc607071486e25dc35553ac6e596e06dc519a5b20a7d6"
+  },
+  {
+    "name": "mingw-w64-x86_64-vulkan-headers",
+    "file": "mingw-w64-x86_64-vulkan-headers-1~1.4.363.0-1-any.pkg.tar.zst",
+    "sha256": "d2e0c72a461e3d128caeac9fbf113fb3cce14644acece32339e448b984d8938d"
+  },
+  {
+    "name": "mingw-w64-x86_64-vulkan-loader",
+    "file": "mingw-w64-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst",
+    "sha256": "281fa31b1a023485d4fd04a092a8b5e9ca2f59804df7fcf9f2d4e5aaa5438af0"
+  },
+  {
+    "name": "mingw-w64-x86_64-boost",
+    "file": "mingw-w64-x86_64-boost-1.92.0-4-any.pkg.tar.zst",
+    "sha256": "b8f63d98cfccddfdc6bce426440b545ce084ea46a61afb3eab5b1f0ec5b39762"
+  },
+  {
+    "name": "mingw-w64-x86_64-libiconv",
+    "file": "mingw-w64-x86_64-libiconv-1.19-1-any.pkg.tar.zst",
+    "sha256": "21e334d0911f25de75d3e18e0697648bcecfa9658256d600cad0827d719c2f35"
+  },
+  {
+    "name": "mingw-w64-x86_64-libgcc",
+    "file": "mingw-w64-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst",
+    "sha256": "e0815432c4225892b0eef57055fe507fa0b9a036436f046605f6629696bd1b88"
+  },
+  {
+    "name": "mingw-w64-x86_64-libstdc++",
+    "file": "mingw-w64-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst",
+    "sha256": "924b47e8c3e20b6448e29d3333acc638a4f4783c1c45230e09673532f9c4f198"
+  },
+  {
+    "name": "mingw-w64-x86_64-libwinpthread",
+    "file": "mingw-w64-x86_64-libwinpthread-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst",
+    "sha256": "89cc97eb3c3a2d4f8a860e8b74eb396ce42e03dbb471dee9b2d6eaf23f72ef25"
+  }
+]

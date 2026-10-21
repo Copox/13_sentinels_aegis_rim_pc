@@ -1,0 +1,18 @@
+[package]
+name = "aegis-pkg"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+
+[dependencies]
+anyhow = "=1.0.100"
+orbis-pkg-util = { version = "=0.1.0", default-features = false }
+serde_json = "1"
+sha2 = "0.10"
+
+[patch.crates-io]
+orbis-pfs = { path = "vendor/orbis-pfs" }
+orbis-pkg-util = { path = "vendor/orbis-pkg-util" }
+
+[profile.release]
+strip = true

@@ -1,0 +1,28 @@
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR AMD64)
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_C_COMPILER_TARGET x86_64-w64-windows-gnu)
+set(CMAKE_CXX_COMPILER_TARGET x86_64-w64-windows-gnu)
+# Clang supports unwind metadata for the guest's sysv_abi callbacks on Win64.
+# GCC 14 emits invalid .seh_handlerdata for some of those C++ functions.
+execute_process(COMMAND x86_64-w64-mingw32-gcc-posix -print-libgcc-file-name
+    OUTPUT_VARIABLE _libgcc OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+get_filename_component(_gcc "${_libgcc}" DIRECTORY)
+set(CMAKE_C_FLAGS_INIT "-femulated-tls")
+set(CMAKE_CXX_FLAGS_INIT "-femulated-tls -fbracket-depth=1024 -isystem ${_gcc}/include/c++ -isystem ${_gcc}/include/c++/x86_64-w64-mingw32 -isystem ${_gcc}/include/c++/backward")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld -L${_gcc}")
+set(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
+if(NOT DEFINED ENV{AEGIS_WIN_SYSROOT})
+    message(FATAL_ERROR "Set AEGIS_WIN_SYSROOT to the Windows dependency prefix")
+endif()
+file(TO_CMAKE_PATH "$ENV{AEGIS_WIN_SYSROOT}" AEGIS_WIN_SYSROOT)
+set(CMAKE_FIND_ROOT_PATH "${AEGIS_WIN_SYSROOT}")
+set(CMAKE_PREFIX_PATH "${AEGIS_WIN_SYSROOT}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+set(ENV{PKG_CONFIG_LIBDIR} "${AEGIS_WIN_SYSROOT}/lib/pkgconfig:${AEGIS_WIN_SYSROOT}/share/pkgconfig")
+# Dependency preparation relocates MSYS2 .pc prefixes before configuration.
+set(ENV{PKG_CONFIG_SYSROOT_DIR} "")
