@@ -43,6 +43,7 @@
 #include <stdatomic.h>
 #include <time.h>
 #include <SDL3/SDL.h>
+#include "pad_diagnostics.h"
 #include <sys/stat.h>
 
 #define ERR_INVALID_ARG ((int32_t)0x80920001)
@@ -95,24 +96,82 @@ static uint64_t vibration_refresh;
 static int rumble_available, led_available, rumble_error_logged;
 static size_t vibration_calls, vibration_nonzero, vibration_sent, vibration_failures, vibration_no_device;
 static size_t lightbar_calls;
+static size_t vibration_invalid, vibration_unsupported;
+static atomic_int vibration_test_requested;
+static int vibration_test_phase;
+static uint64_t vibration_test_deadline, vibration_last_report, vibration_last_request_log;
+static uint64_t vibration_last_error_log;
+static size_t vibration_request_logs;
+static uint64_t vibration_log_window;
+static unsigned vibration_window_logs;
+static uint8_t vibration_last_logged[2], vibration_last_nonzero[2];
+static size_t vibration_nonzero_sent, vibration_nonzero_failed;
+
+static void vibration_summary(uint64_t now,const char *reason) {
+    pad_log(stdout,"summary reason=%s id=%u guest_calls=%zu nonzero=%zu invalid=%zu no_device=%zu unsupported=%zu SDL_accepted=%zu SDL_failed=%zu nonzero_SDL_accepted=%zu nonzero_SDL_failed=%zu requested_large=%u requested_small=%u last_nonzero_large=%u last_nonzero_small=%u test_phase=%d reads=%zu",
+        reason,gamepad ? (unsigned)SDL_GetGamepadID(gamepad) : 0,vibration_calls,vibration_nonzero,
+        vibration_invalid,vibration_no_device,vibration_unsupported,vibration_sent,vibration_failures,
+        vibration_nonzero_sent,vibration_nonzero_failed,vibration[0],vibration[1],
+        vibration_last_nonzero[0],vibration_last_nonzero[1],vibration_test_phase,reads);
+    vibration_last_report=now;
+}
 
 static void stop_vibration(void) { /* called under lock */
-    if (gamepad && rumble_available && (vibration[0] || vibration[1]))
-        SDL_RumbleGamepad(gamepad,0,0,0);
+    if (gamepad && (vibration[0] || vibration[1] || vibration_test_phase))
+        pad_log_rumble(stdout,gamepad,"close-or-disconnect",0,0,0);
     vibration[0]=vibration[1]=0;
     vibration_refresh=0;
+    vibration_test_phase=0;
 }
-static void send_vibration(SDL_Gamepad *g,uint64_t now) {
-    if (!g || !rumble_available) return;
+static void send_vibration(SDL_Gamepad *g,uint64_t now,const char *source,int trace) {
+    if (!g || vibration_test_phase) return;
+    /* Do not silently discard output solely on a capability snapshot. SDL's return
+     * and error describe the actual attempted operation, including unsupported pads. */
+    SDL_ClearError();
     if (SDL_RumbleGamepad(g,(uint16_t)(vibration[0]*257u),
                           (uint16_t)(vibration[1]*257u),1000)) {
         ++vibration_sent;
+        if (vibration[0] || vibration[1]) ++vibration_nonzero_sent;
+        if (vibration_sent<=8 || trace)
+            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=1000 SDL_accepted=1",
+                source,(unsigned)SDL_GetGamepadID(g),vibration[0]*257u,vibration[1]*257u);
     } else {
         ++vibration_failures;
-        if (!rumble_error_logged++)
-            printf("Runtime: gamepad rumble failed: %s\n",SDL_GetError());
+        if (vibration[0] || vibration[1]) ++vibration_nonzero_failed;
+        if (!rumble_error_logged || trace || now-vibration_last_error_log>=5000000) {
+            rumble_error_logged=1;
+            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=1000 SDL_accepted=0 error=\"%s\" failures=%zu",
+                source,(unsigned)SDL_GetGamepadID(g),vibration[0]*257u,vibration[1]*257u,SDL_GetError(),vibration_failures);
+            vibration_last_error_log=now;
+        }
     }
     vibration_refresh=now;
+}
+static void vibration_tick(SDL_Gamepad *g,uint64_t now) {
+    if (atomic_exchange(&vibration_test_requested,0)) {
+        pad_log_device(stdout,g,"F8-test-device");
+        pad_log(stdout,"F8 test bypasses guest requests: low motor 1s, high motor 1s, then restore current guest output");
+        if (g) {
+            vibration_test_phase=1; vibration_test_deadline=now+1100000;
+            pad_log_rumble(stdout,g,"F8-reset",0,0,0);
+            pad_log_rumble(stdout,g,"F8-low-motor",0xffff,0,1000);
+        }
+    }
+    if (g && vibration_test_phase && now>=vibration_test_deadline) {
+        if (vibration_test_phase==1) {
+            vibration_test_phase=2; vibration_test_deadline=now+1100000;
+            pad_log_rumble(stdout,g,"F8-high-motor",0,0xffff,1000);
+        } else {
+            pad_log_rumble(stdout,g,"F8-stop",0,0,0);
+            vibration_test_phase=0;
+            send_vibration(g,now,"F8-restore-guest",1);
+            vibration_summary(now,"F8-test-complete");
+        }
+    }
+    if (g && !vibration_test_phase && (vibration[0] || vibration[1]) && now-vibration_refresh>=250000)
+        send_vibration(g,now,"guest-lease-refresh",0);
+    if (!vibration_last_report || now-vibration_last_report>=5000000)
+        vibration_summary(now,"periodic");
 }
 
 /* Per-controller stick neutral (see the file header): the value each axis holds while the
@@ -260,9 +319,11 @@ static int is_preferred(SDL_JoystickID id, const char *want) {
 static SDL_Gamepad *current_gamepad(void) {
     static int on_preferred; static uint64_t last_scan;
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
-    if (sdl_ready<0) return NULL;
+    if (sdl_ready<0) { static int told; if (!told++) pad_log(stdout,"gamepad subsystem failed: %s",SDL_GetError()); return NULL; }
     if (gamepad && !SDL_GamepadConnected(gamepad)) {
+        pad_log_device(stdout,gamepad,"disconnected");
         stop_vibration(); SDL_CloseGamepad(gamepad); gamepad=NULL;
+        rumble_available=led_available=0;
     }
     const char *want=preferred_gamepad();
     const uint64_t now=now_us();
@@ -275,6 +336,7 @@ static SDL_Gamepad *current_gamepad(void) {
         if (pick>=0 && (!gamepad || SDL_GetGamepadID(gamepad)!=ids[pick])) {
             stop_vibration();
             if (gamepad) SDL_CloseGamepad(gamepad);
+            rumble_available=led_available=0;
             gamepad=SDL_OpenGamepad(ids[pick]);
             cal_reset(); /* a new pad has its own neutral */
             on_preferred=want && gamepad && is_preferred(ids[pick],want);
@@ -286,12 +348,14 @@ static SDL_Gamepad *current_gamepad(void) {
                 rumble_available=SDL_GetBooleanProperty(props,SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN,false);
                 led_available=SDL_GetBooleanProperty(props,SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false);
                 rumble_error_logged=0;
+                pad_log_device(stdout,gamepad,"game-selected");
+                pad_log(stdout,"selection preference=%s; diagnostic shortcut=F8",pad_text(want));
                 printf("Runtime: gamepad output: rumble=%s, RGB=%s, type=%d, vendor=%04x, product=%04x, connection=%d\n",
                        rumble_available ? "yes" : "no",led_available ? "yes" : "no",
                        (int)SDL_GetGamepadType(gamepad),SDL_GetGamepadVendor(gamepad),SDL_GetGamepadProduct(gamepad),
                        (int)SDL_GetGamepadConnectionState(gamepad));
                 if (led_available) SDL_SetGamepadLED(gamepad,lightbar[0],lightbar[1],lightbar[2]);
-            }
+            } else pad_log(stdout,"SDL_OpenGamepad id=%u failed: %s",(unsigned)ids[pick],SDL_GetError());
         }
         SDL_free(ids);
     }
@@ -541,6 +605,10 @@ static volatile uint8_t key_latch[SDL_SCANCODE_COUNT];
 static atomic_int fullscreen_enter_held;
 static bool key_watch(void *userdata, SDL_Event *e) {
     (void)userdata;
+    if (e->type==SDL_EVENT_KEY_DOWN && !e->key.repeat && e->key.scancode==SDL_SCANCODE_F8) {
+        atomic_store(&vibration_test_requested,1);
+        return true;
+    }
     /* Host shortcuts must not become a guest confirm, even if Alt is released first. */
     if ((e->type==SDL_EVENT_KEY_DOWN || e->type==SDL_EVENT_KEY_UP) &&
         (e->key.scancode==SDL_SCANCODE_RETURN || e->key.scancode==SDL_SCANCODE_KP_ENTER)) {
@@ -557,6 +625,7 @@ static void key_watch_start(void) {
     if (!started && SDL_WasInit(SDL_INIT_VIDEO)) { SDL_AddEventWatch(key_watch,NULL); started=1; }
 }
 static int code_down(const bool *k, int code) {
+    if (code==SDL_SCANCODE_F8) return 0; /* Host rumble diagnostic. */
     if ((code==SDL_SCANCODE_RETURN || code==SDL_SCANCODE_KP_ENTER) &&
         (atomic_load(&fullscreen_enter_held) || (k && (k[SDL_SCANCODE_LALT] || k[SDL_SCANCODE_RALT])))) return 0;
     if (code>=0 && code<SDL_SCANCODE_COUNT && key_latch[code]) return 1;
@@ -1095,8 +1164,7 @@ static void sample_host(PadData *d) {
     motion.last_us=d->timestamp;
     motion.shaking=0;
     SDL_Gamepad *g=current_gamepad();
-    if (g && (vibration[0] || vibration[1]) && d->timestamp-vibration_refresh>=250000)
-        send_vibration(g,d->timestamp);
+    vibration_tick(g,d->timestamp);
     if (!bindings_ready) { load_bindings(); bindings_ready=1; bbgpu_mouse_look_enable(mouse_look); }
     /* The mouse's motion and wheel since the last sample (always taken: none of it piles up while
      * the menu is open); it counts while the window holds the mouse. */
@@ -1310,7 +1378,15 @@ static void sample(PadData *d) {
     touch_ids(d);
 }
 
-static ABI int32_t pad_init(void) { pthread_mutex_lock(&lock); initialized=1; pthread_mutex_unlock(&lock); return 0; }
+static ABI int32_t pad_init(void) {
+    pthread_mutex_lock(&lock);
+    if (!initialized) {
+        pad_log_sdl(stdout,"game");
+        pad_log(stdout,"binding scePadSetVibration -> host pad_vibration -> SDL_RumbleGamepad; F8 tests both motors independently");
+    }
+    initialized=1;
+    pthread_mutex_unlock(&lock); return 0;
+}
 static ABI int32_t pad_open(int32_t user, int32_t type, int32_t index, const void *param) {
     (void)param;
     if (!initialized) return ERR_NOT_INITIALIZED;
@@ -1375,20 +1451,39 @@ static ABI int32_t pad_info(int32_t handle, ControllerInfo *info) {
     return 0;
 }
 static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
-    if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
-    if (!param) return ERR_INVALID_ARG;
     pthread_mutex_lock(&lock);
-    SDL_Gamepad *g=current_gamepad();
     ++vibration_calls;
+    if (handle!=PAD_HANDLE || !opened || !param) {
+        if (++vibration_invalid<=8)
+            pad_log(stdout,"guest scePadSetVibration call=%zu handle=%d opened=%d parameter=%s rejected=%s",
+                vibration_calls,handle,opened,param ? "present" : "NULL",
+                handle!=PAD_HANDLE || !opened ? "invalid handle" : "invalid argument");
+        const int32_t result=handle!=PAD_HANDLE || !opened ? ERR_INVALID_HANDLE : ERR_INVALID_ARG;
+        pthread_mutex_unlock(&lock); return result;
+    }
+    SDL_Gamepad *g=current_gamepad();
+    const uint64_t now=now_us();
     if (param[0] || param[1]) {
         ++vibration_nonzero;
+        vibration_last_nonzero[0]=param[0]; vibration_last_nonzero[1]=param[1];
         if (vibration_nonzero==1)
             printf("Runtime: first nonzero game vibration: large=%u, small=%u, output=%s\n",
                    param[0],param[1],!g ? "no device" : rumble_available ? "SDL rumble" : "unsupported");
     }
+    if (now-vibration_log_window>=1000000) { vibration_log_window=now; vibration_window_logs=0; }
+    const int changed=param[0]!=vibration_last_logged[0] || param[1]!=vibration_last_logged[1];
+    const int trace=vibration_request_logs<32 || (changed && vibration_window_logs<16) || now-vibration_last_request_log>=5000000;
+    if (trace) {
+        ++vibration_request_logs; vibration_last_request_log=now;
+        ++vibration_window_logs;
+        vibration_last_logged[0]=param[0]; vibration_last_logged[1]=param[1];
+        pad_log(stdout,"guest scePadSetVibration call=%zu handle=%d large=%u small=%u id=%u capability=%d test_override=%d",
+            vibration_calls,handle,param[0],param[1],g ? (unsigned)SDL_GetGamepadID(g) : 0,rumble_available,vibration_test_phase);
+    }
     if (g) {
+        if (!rumble_available) ++vibration_unsupported;
         vibration[0]=param[0]; vibration[1]=param[1];
-        send_vibration(g,now_us());
+        send_vibration(g,now,"guest",trace);
     } else {
         ++vibration_no_device;
     }
@@ -1426,6 +1521,7 @@ static const RuntimeExport exports[]={
 uintptr_t runtime_pad_resolve(const char *name) { return RUNTIME_LOOKUP(exports,name); }
 void runtime_pad_report(void) {
     pthread_mutex_lock(&lock);
+    vibration_summary(now_us(),"shutdown");
     printf("Runtime: pad reads=%zu, gamepad=%s\n",reads,gamepad ? SDL_GetGamepadName(gamepad) : "none");
     printf("Runtime: pad vibration calls=%zu, nonzero=%zu, sent=%zu, failures=%zu, no device=%zu, supported=%d, lightbar calls=%zu\n",
            vibration_calls,vibration_nonzero,vibration_sent,vibration_failures,vibration_no_device,

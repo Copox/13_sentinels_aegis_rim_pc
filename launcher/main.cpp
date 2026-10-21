@@ -6,6 +6,7 @@
 #include "settings.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include "../src/pad_diagnostics.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -43,6 +44,16 @@ std::string pkg_file, import_folder = "CUSA18093", import_message;
 fs::path import_destination, import_stage, import_progress;
 std::vector<SDL_Gamepad *> controllers;
 std::string rumble_message;
+FILE *controller_log;
+fs::path controller_log_path;
+bool controllers_suspended = false;
+int rumble_test_phase = 0;
+bool rumble_test_failed = false;
+Uint64 rumble_test_deadline = 0;
+SDL_JoystickID rumble_test_id = 0;
+void Controllers();
+void SuspendControllers();
+void ResumeControllers();
 fs::path last_log;
 #ifdef _WIN32
 HANDLE child = nullptr;
@@ -195,6 +206,7 @@ bool Running() {
             launching = false;
         } else status = code == 0 ? "游戏已退出 · 日志已保存" : "游戏未正常启动或退出 · 请查看 logs";
     }
+    ResumeControllers();
     return false;
 }
 void Start() {
@@ -231,12 +243,14 @@ void Start() {
 #else
     fs::path exe = "python3";
 #endif
+    // Only the game process should own controller output while it is running.
+    SuspendControllers();
     if (Spawn(exe, args)) {
         launch_output = out;
         launching = true;
         launch_error.clear();
         status = "正在检查游戏文件…";
-    }
+    } else ResumeControllers();
 }
 void PickPath(int kind) {
     dialog_kind = kind;
@@ -352,16 +366,66 @@ void ImportPage() {
         ImGui::TextWrapped("%s", import_message.c_str());
 }
 void Controllers() {
+    if (controllers_suspended) return;
+    if (rumble_test_phase)
+        pad_log(controller_log,"launcher rumble test cancelled by device change");
+    rumble_test_phase = 0;
     for (auto *p : controllers)
         SDL_CloseGamepad(p);
     controllers.clear();
     rumble_message.clear();
     int n = 0;
     auto *ids = SDL_GetGamepads(&n);
-    for (int i = 0; i < n; ++i)
-        if (auto *p = SDL_OpenGamepad(ids[i]))
+    pad_log(controller_log,"launcher enumerate count=%d error=%s",n,ids ? "" : SDL_GetError());
+    for (int i = 0; ids && i < n; ++i)
+        if (auto *p = SDL_OpenGamepad(ids[i])) {
             controllers.push_back(p);
+            pad_log_device(controller_log,p,"launcher-open");
+        } else pad_log(controller_log,"launcher open id=%u failed: %s",(unsigned)ids[i],SDL_GetError());
     SDL_free(ids);
+}
+void SuspendControllers() {
+    if (controllers_suspended) return;
+    pad_log(controller_log,"handoff: releasing all launcher gamepads and SDL gamepad subsystem before starting game process");
+    for (auto *p : controllers) {
+        if (rumble_test_phase && SDL_GetGamepadID(p) == rumble_test_id)
+            pad_log_rumble(controller_log,p,"launcher-test-cancel",0,0,0);
+        SDL_CloseGamepad(p);
+    }
+    controllers.clear();
+    rumble_test_phase = 0;
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    controllers_suspended = true;
+}
+void ResumeControllers() {
+    if (!controllers_suspended) return;
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+        pad_log(controller_log,"resume gamepads failed: %s",SDL_GetError());
+        return;
+    }
+    controllers_suspended = false;
+    pad_log(controller_log,"game process exited; launcher resumes gamepad ownership");
+    Controllers();
+}
+void TickRumbleTest() {
+    if (!rumble_test_phase || SDL_GetTicks() < rumble_test_deadline) return;
+    auto *p = SDL_GetGamepadFromID(rumble_test_id);
+    if (!p) {
+        pad_log(controller_log,"launcher test device id=%u disconnected",(unsigned)rumble_test_id);
+        rumble_test_phase = 0;
+        rumble_message = "测试中断：手柄已断开";
+    } else if (rumble_test_phase == 1) {
+        const bool ok = pad_log_rumble(controller_log,p,"launcher-high-motor",0,0xffff,1000);
+        rumble_test_failed |= !ok;
+        rumble_test_phase = 2;
+        rumble_test_deadline = SDL_GetTicks() + 1100;
+        rumble_message = ok ? "高频马达测试中…" : std::string("高频震动失败：") + SDL_GetError();
+    } else {
+        pad_log_rumble(controller_log,p,"launcher-test-stop",0,0,0);
+        rumble_test_phase = 0;
+        rumble_message = rumble_test_failed ? "测试结束 · 至少一个震动请求失败，请查看日志"
+            : "SDL 已接受两次请求 · 请确认实际震动情况";
+    }
 }
 std::string KeyLabel(std::string s) {
     if (s.empty())
@@ -413,19 +477,29 @@ void Mappings(bool pad) {
             ImGui::TextColored({.85f, .7f, .44f, 1}, "当前未连接手柄 · 键盘仍可使用");
         else {
             ImGui::Text("已连接：%s", SDL_GetGamepadName(controllers.front()));
-            if (ImGui::Button("测试震动")) {
+            ImGui::BeginDisabled(rumble_test_phase != 0);
+            if (ImGui::Button("测试震动 · 两个马达")) {
                 auto *p = controllers.front();
-                const bool supported = SDL_GetBooleanProperty(SDL_GetGamepadProperties(p),
-                    SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
-                if (!supported)
-                    rumble_message = "设备未提供震动功能";
-                else if (SDL_RumbleGamepad(p, 0x8000, 0x8000, 500))
-                    rumble_message = "已发送半秒震动";
-                else
-                    rumble_message = std::string("震动失败：") + SDL_GetError();
+                pad_log_device(controller_log,p,"launcher-test-device");
+                pad_log_rumble(controller_log,p,"launcher-test-reset",0,0,0);
+                const bool ok = pad_log_rumble(controller_log,p,"launcher-low-motor",0xffff,0,1000);
+                rumble_test_failed = !ok;
+                rumble_test_id = SDL_GetGamepadID(p);
+                rumble_test_phase = 1;
+                rumble_test_deadline = SDL_GetTicks() + 1100;
+                rumble_message = ok ? "低频马达测试中…" : std::string("低频震动失败：") + SDL_GetError();
             }
-            ImGui::SameLine();
+            ImGui::EndDisabled();
             ImGui::TextWrapped("%s", rumble_message.c_str());
+        }
+        ImGui::TextDisabled("游戏内按 F8 独立测试震动；诊断记录在 logs/controller-*.log");
+        if (ImGui::Button("打开手柄日志目录")) {
+            const std::string url = "file://" + Utf8(settings.root / "logs");
+#ifdef _WIN32
+            ShellExecuteW(nullptr,L"open",(settings.root / "logs").c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+#else
+            SDL_OpenURL(url.c_str());
+#endif
         }
     } else {
         if (ImGui::Button("恢复默认键盘")) {
@@ -678,6 +752,18 @@ int Main(int argc, char **argv) {
         root = root.parent_path();
     settings.Load(root);
     fs::current_path(root);
+    fs::create_directories(root / "logs");
+    const auto log_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    char log_stamp[48];
+    std::strftime(log_stamp,sizeof(log_stamp),"%Y%m%d-%H%M%S",std::localtime(&log_time));
+    controller_log_path = root / "logs" / (std::string("controller-") + log_stamp + "-" + std::to_string(SDL_GetTicksNS()) + ".log");
+#ifdef _WIN32
+    controller_log = _wfopen(controller_log_path.c_str(),L"w");
+#else
+    controller_log = std::fopen(controller_log_path.c_str(),"w");
+#endif
+    if (!controller_log) throw std::runtime_error("无法写入手柄诊断日志 / Cannot write controller diagnostics");
+    pad_log_sdl(controller_log,"launcher");
     int width = 1920, height = 1080;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -811,6 +897,7 @@ int Main(int argc, char **argv) {
             }
             ImGui_ImplSDL3_ProcessEvent(&event);
         }
+        TickRumbleTest();
         {
             std::lock_guard lock(dialog_mutex);
             if (dialog_done) {
@@ -860,6 +947,8 @@ int Main(int argc, char **argv) {
         Save();
     for (auto *p : controllers)
         SDL_CloseGamepad(p);
+    pad_log(controller_log,"launcher shutdown");
+    if (controller_log) std::fclose(controller_log);
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();

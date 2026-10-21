@@ -61,5 +61,11 @@ Enter/F 确认，Space/Backspace 返回，WASD 移动，方向键选择，Esc �
 Alt+Enter 切换全屏，F10 开关状态面板。SDL3 手柄支持热插拔。
 设置与存档在 `user/` 中，请自行备份。
 
+震动排查：在 Launcher 的手柄映射页点击“测试震动”，或在游戏内按 F8，
+分别测试低频、高频马达。Launcher 设备与测试日志保存在 `logs/controller-*.log`，
+游戏请求与 SDL 返回值在 `logs/<本次运行>/stdout.log`；每 5 秒记录一次计数。
+日志会记录 SDL 版本、Windows DLL 路径、设备和输出能力；SDL 接受请求不代表马达实际动作。
+反馈问题时请同时提供这两份日志，以及两处测试是否感到震动。
+
 源码采用 GPL-2.0-or-later；许可证与来源见 [LICENSE](LICENSE) 和 [NOTICE.md](NOTICE.md)。
 本项目与游戏权利方没有关联。

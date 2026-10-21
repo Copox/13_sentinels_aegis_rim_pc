@@ -6,5 +6,8 @@ The Import PKG tab accepts supported, already-decryptable packages; no retail de
 Enter/F confirms, Space/Backspace cancels, WASD moves, arrows select, Esc opens the menu.
 Alt+Enter toggles fullscreen; F10 toggles statistics. Game logic remains 60 Hz.
 Settings and saves are stored in user/. Back it up before changing installations.
+Rumble diagnostics: use the launcher's gamepad rumble test or F8 in-game to test both motors.
+Include logs/controller-*.log and logs/<run>/stdout.log in reports, and whether each test vibrated.
+Logs record SDL version/DLL path, devices, guest requests and SDL results. SDL acceptance does not confirm physical vibration.
 Source, build instructions and licenses: https://github.com/kxn/13_sentinels_aegis_rim_pc
 See README.zh-CN.txt for Chinese instructions.

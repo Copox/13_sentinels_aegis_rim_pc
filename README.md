@@ -61,5 +61,12 @@ Game logic stays at 60 Hz. Enter/F confirms; Space/Backspace cancels; WASD moves
 arrow keys select; Esc opens the menu; Alt+Enter toggles fullscreen; F10 toggles statistics.
 SDL3 gamepads support hot-plugging. Settings and saves are stored in `user/`; back it up.
 
+To diagnose rumble, use **Test rumble** in the launcher's gamepad tab or press F8 in-game
+to test the low- and high-frequency motors separately. Launcher diagnostics are in
+`logs/controller-*.log`; guest requests and SDL results are in `logs/<run>/stdout.log`,
+with counters every 5 seconds. Logs include the SDL version, Windows DLL path, device
+and output capabilities. SDL accepting a request does not confirm physical vibration.
+For reports, include both logs and whether you felt vibration in each test.
+
 Source: GPL-2.0-or-later. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for attribution.
 This project is not affiliated with the game's rights holders.
