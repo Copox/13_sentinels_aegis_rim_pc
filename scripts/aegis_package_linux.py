@@ -36,11 +36,15 @@ def main():
     for name in ['aegis.bmp', 'launcher-background.bmp']:
         shutil.copy2(ROOT / 'out' / name, output / 'assets' / name)
     shutil.copytree(ROOT / 'out/pkg-licenses', output / 'licenses/PKG-importer')
-    for source in (ROOT / 'gpu/third_party').rglob('*'):
-        if source.is_file() and source.name.lower().startswith(('license', 'copying', 'copyright', 'notice')):
-            target = output / 'licenses/source' / source.relative_to(ROOT / 'gpu/third_party')
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
+    source_roots = [ROOT / 'gpu/third_party', ROOT / 'third_party/LibAtrac9',
+                    ROOT / 'gpu/dlss_bridge', ROOT / 'out/gpu/_deps']
+    for index, source_root in enumerate(source_roots):
+        if not source_root.is_dir(): continue
+        for source in source_root.rglob('*'):
+            if source.is_file() and source.name.lower().startswith(('license', 'copying', 'copyright', 'notice')):
+                target = output / 'licenses' / ('source-' + str(index)) / source.relative_to(source_root)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
     entry = output / 'AegisLauncher'
     entry.write_text('#!/bin/sh\ncd -- "$(dirname -- "$0")"\nexec ./out/gpu/AegisLauncher "$@"\n')
     entry.chmod(0o755)

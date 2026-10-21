@@ -86,9 +86,9 @@ jobs:
       - name: Package checksums / 生成包哈希
         run: |
           if [ '${{ matrix.platform }}' = windows ]; then
-            sha256sum dist/aegis-windows.zip > dist/SHA256SUMS-windows.txt
+            (cd dist && sha256sum aegis-windows.zip > SHA256SUMS-windows.txt)
           else
-            sha256sum dist/aegis-linux.tar.gz > dist/SHA256SUMS-linux.txt
+            (cd dist && sha256sum aegis-linux.tar.gz > SHA256SUMS-linux.txt)
           fi
       - name: Upload package / 上传运行包
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
