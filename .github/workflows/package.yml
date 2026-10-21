@@ -16,7 +16,7 @@ concurrency:
 jobs:
   package:
     name: ${{ matrix.platform }} / 打包
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: debian:trixie
     timeout-minutes: 60
     strategy:
@@ -28,15 +28,15 @@ jobs:
         shell: bash
     env:
       DEBIAN_FRONTEND: noninteractive
-      AEGIS_BUILD_JOBS: '2'
-      CARGO_BUILD_JOBS: '2'
+      AEGIS_BUILD_JOBS: '4'
+      CARGO_BUILD_JOBS: '4'
     steps:
       - name: Bootstrap tools / 安装基础工具
         run: |
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl git
       - name: Checkout sources / 检出源码
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           submodules: recursive
           persist-credentials: false
@@ -54,8 +54,14 @@ jobs:
         with:
           toolchain: 1.85.1
           targets: x86_64-pc-windows-gnu
+      - name: Trust container checkout / 配置容器检出目录
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          for source in gpu/third_party/fsr-vulkan gpu/third_party/imgui third_party/LibAtrac9; do
+            git config --global --add safe.directory "$GITHUB_WORKSPACE/$source"
+          done
       - name: Cache dependencies / 缓存依赖
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: |
             .deps
@@ -85,7 +91,7 @@ jobs:
             sha256sum dist/aegis-linux.tar.gz > dist/SHA256SUMS-linux.txt
           fi
       - name: Upload package / 上传运行包
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: aegis-${{ matrix.platform }}
           path: |
