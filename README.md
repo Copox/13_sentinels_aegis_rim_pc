@@ -59,7 +59,9 @@ decrypt retail packages or combine updates. File verification must pass before l
 Choose resolution, fullscreen, display refresh, volume and input mappings, then start.
 Game logic stays at 60 Hz. Enter/F confirms; Space/Backspace cancels; WASD moves;
 arrow keys select; Esc opens the menu; Alt+Enter toggles fullscreen; F10 toggles statistics.
-SDL3 gamepads support hot-plugging. Settings and saves are stored in `user/`; back it up.
+SDL3 gamepads support hot-plugging. The gamepad tab also offers optional PC-added rumble
+when a protagonist mech loses HP in battle (enabled by default); enemies, summons and
+other friendly objects do not trigger it. Settings and saves are stored in `user/`; back it up.
 
 To diagnose rumble, use **Test rumble** in the launcher's gamepad tab or press F8 in-game
 to test the low- and high-frequency motors separately. Launcher diagnostics are in

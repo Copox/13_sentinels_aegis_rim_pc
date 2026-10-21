@@ -8,6 +8,8 @@ Alt+Enter 切换全屏，F10 开关状态面板，游戏逻辑固定 60Hz。
 震动排查：Launcher 手柄页“测试震动”，游戏内 F8，各测试两个马达。
 反馈时请附 logs/controller-*.log 和 logs/<本次运行>/stdout.log，以及两处测试是否有震动。
 日志包含 SDL 版本、DLL 路径、设备、游戏请求与 SDL 返回值；SDL 接受不等于实际震动。
+手柄页“主角机兵受伤震动（PC 新增）”默认开启，仅主角机兵在战斗中实际扣血时短震动。
+敌人、召唤物、据点等不触发；可取消勾选并保存，下次启动生效。
 设置和存档位于 user/，更换安装位置前请备份。
 源码、构建与许可证：https://github.com/kxn/13_sentinels_aegis_rim_pc
 英文使用说明见 README.en.txt。

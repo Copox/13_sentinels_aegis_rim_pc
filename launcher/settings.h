@@ -93,6 +93,7 @@ struct Settings {
     int resolution = 0, refresh = 0, preset = 0;
     int custom_refresh = 180;
     bool fullscreen = false, vsync = true;
+    bool damage_rumble = true;
     float gain = 1;
     // Keep old 4K settings on the compatibility path unless Pro is explicitly selected.
     static constexpr const char *Resolutions[] = {"1920x1080", "2560x1440", "3840x2160", "3840x2160"};
@@ -147,6 +148,7 @@ struct Settings {
                 refresh = i;
         fullscreen = launcher["fullscreen"] == "1";
         vsync = runtime["display_vsync"] != "0";
+        damage_rumble = runtime["damage_rumble"] != "0";
         try {
             preset = std::stoi(launcher.at("controller_preset"));
         } catch (...) {
@@ -203,6 +205,7 @@ struct Settings {
         runtime["render_mode"] = resolution == 2 ? "pro" : "base";
         runtime["audio_gain"] = std::to_string(gain);
         runtime["audio_mix_version"] = "1";
+        runtime["damage_rumble"] = damage_rumble ? "1" : "0";
         custom_refresh = std::clamp(custom_refresh, 30, 1000);
         runtime["display_fps"] = std::to_string(refresh == 6 ? custom_refresh : Rates[refresh]);
         runtime["display_vsync"] = vsync ? "1" : "0";

@@ -493,6 +493,7 @@ void Mappings(bool pad) {
             ImGui::TextWrapped("%s", rumble_message.c_str());
         }
         ImGui::TextDisabled("游戏内按 F8 独立测试震动；诊断记录在 logs/controller-*.log");
+        if (ImGui::Checkbox("主角机兵受伤震动（PC 新增）", &settings.damage_rumble)) dirty = true;
         if (ImGui::Button("打开手柄日志目录")) {
             const std::string url = "file://" + Utf8(settings.root / "logs");
 #ifdef _WIN32

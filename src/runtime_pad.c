@@ -44,6 +44,7 @@
 #include <time.h>
 #include <SDL3/SDL.h>
 #include "pad_diagnostics.h"
+#include <inttypes.h>
 #include <sys/stat.h>
 
 #define ERR_INVALID_ARG ((int32_t)0x80920001)
@@ -106,6 +107,34 @@ static uint64_t vibration_log_window;
 static unsigned vibration_window_logs;
 static uint8_t vibration_last_logged[2], vibration_last_nonzero[2];
 static size_t vibration_nonzero_sent, vibration_nonzero_failed;
+static int damage_rumble_enabled;
+/* Single lock-free mailbox: host monotonic milliseconds (48 bits), strength (16).
+ * Guest hooks never call SDL or wait for the controller lock. */
+static atomic_uint_fast64_t damage_pending, damage_events;
+static uint64_t damage_until, damage_cooldown;
+static uint16_t damage_strength;
+static size_t damage_pulses, damage_dropped;
+static uint64_t now_us(void);
+
+void runtime_pad_player_damage(int pilot,int before,int after,int maximum) {
+    if (!damage_rumble_enabled || pilot<0 || pilot>12 || before<=0 || after<0 ||
+        after>=before || maximum<=0 || before>maximum) return;
+    /* 22..75% low motor, half that on the high motor. Damage fraction, not raw HP,
+     * keeps feedback comparable between early and upgraded mechs. */
+    const uint64_t strength=14418u+((uint64_t)(before-after)*34733u)/(unsigned)maximum;
+    const uint64_t stamp=now_us()/1000u;
+    uint_fast64_t previous=atomic_load(&damage_pending), next;
+    do {
+        uint64_t merged=strength;
+        if (previous && stamp>=(previous>>16) && stamp-(previous>>16)<=100 &&
+            (previous&0xffff)>merged) merged=previous&0xffff;
+        next=(stamp<<16)|merged;
+    } while (!atomic_compare_exchange_weak(&damage_pending,&previous,next));
+    const uint64_t count=atomic_fetch_add(&damage_events,1)+1;
+    if (count<=16 || count%100==0)
+        pad_log(stdout,"player-damage event=%" PRIu64 " pilot=%d HP=%d->%d max=%d strength=%" PRIu64,
+                count,pilot,before,after,maximum,strength);
+}
 
 static void vibration_summary(uint64_t now,const char *reason) {
     pad_log(stdout,"summary reason=%s id=%u guest_calls=%zu nonzero=%zu invalid=%zu no_device=%zu unsupported=%zu SDL_accepted=%zu SDL_failed=%zu nonzero_SDL_accepted=%zu nonzero_SDL_failed=%zu requested_large=%u requested_small=%u last_nonzero_large=%u last_nonzero_small=%u test_phase=%d reads=%zu",
@@ -114,41 +143,76 @@ static void vibration_summary(uint64_t now,const char *reason) {
         vibration_nonzero_sent,vibration_nonzero_failed,vibration[0],vibration[1],
         vibration_last_nonzero[0],vibration_last_nonzero[1],vibration_test_phase,reads);
     vibration_last_report=now;
+    pad_log(stdout,"damage-feedback enabled=%d events=%" PRIuFAST64 " pulses=%zu dropped=%zu active=%d",
+        damage_rumble_enabled,atomic_load(&damage_events),damage_pulses,damage_dropped,damage_strength!=0);
 }
 
 static void stop_vibration(void) { /* called under lock */
-    if (gamepad && (vibration[0] || vibration[1] || vibration_test_phase))
+    if (gamepad && (vibration[0] || vibration[1] || vibration_test_phase || damage_strength))
         pad_log_rumble(stdout,gamepad,"close-or-disconnect",0,0,0);
     vibration[0]=vibration[1]=0;
     vibration_refresh=0;
     vibration_test_phase=0;
+    damage_strength=0; damage_until=damage_cooldown=0;
+    atomic_store(&damage_pending,0);
 }
 static void send_vibration(SDL_Gamepad *g,uint64_t now,const char *source,int trace) {
     if (!g || vibration_test_phase) return;
+    uint16_t low=(uint16_t)(vibration[0]*257u), high=(uint16_t)(vibration[1]*257u);
+    uint32_t duration=1000;
+    if (damage_strength && now<damage_until) {
+        if (low<damage_strength) low=damage_strength;
+        if (high<damage_strength/2) high=damage_strength/2;
+        /* The driver expires a custom pulse even if the guest stops polling. */
+        duration=(uint32_t)((damage_until-now+999)/1000);
+    }
     /* Do not silently discard output solely on a capability snapshot. SDL's return
      * and error describe the actual attempted operation, including unsupported pads. */
     SDL_ClearError();
-    if (SDL_RumbleGamepad(g,(uint16_t)(vibration[0]*257u),
-                          (uint16_t)(vibration[1]*257u),1000)) {
+    if (SDL_RumbleGamepad(g,low,high,duration)) {
         ++vibration_sent;
-        if (vibration[0] || vibration[1]) ++vibration_nonzero_sent;
+        if (low || high) ++vibration_nonzero_sent;
         if (vibration_sent<=8 || trace)
-            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=1000 SDL_accepted=1",
-                source,(unsigned)SDL_GetGamepadID(g),vibration[0]*257u,vibration[1]*257u);
+            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=%u SDL_accepted=1",
+                source,(unsigned)SDL_GetGamepadID(g),low,high,duration);
     } else {
         ++vibration_failures;
-        if (vibration[0] || vibration[1]) ++vibration_nonzero_failed;
+        if (low || high) ++vibration_nonzero_failed;
         if (!rumble_error_logged || trace || now-vibration_last_error_log>=5000000) {
             rumble_error_logged=1;
-            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=1000 SDL_accepted=0 error=\"%s\" failures=%zu",
-                source,(unsigned)SDL_GetGamepadID(g),vibration[0]*257u,vibration[1]*257u,SDL_GetError(),vibration_failures);
+            pad_log(stdout,"output source=%s id=%u low=%u high=%u duration_ms=%u SDL_accepted=0 error=\"%s\" failures=%zu",
+                source,(unsigned)SDL_GetGamepadID(g),low,high,duration,SDL_GetError(),vibration_failures);
             vibration_last_error_log=now;
         }
     }
     vibration_refresh=now;
 }
 static void vibration_tick(SDL_Gamepad *g,uint64_t now) {
+    const uint64_t pending=atomic_exchange(&damage_pending,0);
+    if (damage_strength && now>=damage_until) {
+        damage_strength=0;
+        send_vibration(g,now,"player-damage-end-restore-guest",1);
+    }
+    if (pending) {
+        const uint64_t stamp=pending>>16, tick_ms=now/1000u;
+        /* A producer may enqueue just after this input sample took its timestamp. */
+        const int fresh=stamp>=tick_ms || tick_ms-stamp<=200;
+        if (damage_rumble_enabled && g && opened && !vibration_test_phase && fresh &&
+            (damage_strength || now>=damage_cooldown)) {
+            const uint16_t strength=(uint16_t)pending;
+            if (!damage_strength) {
+                damage_until=now+180000; damage_cooldown=damage_until+80000;
+                ++damage_pulses;
+            }
+            /* Multiple hits may strengthen a pulse, never extend its deadline. */
+            if (strength>damage_strength) {
+                damage_strength=strength;
+                send_vibration(g,now,"player-damage",damage_pulses<=16 || damage_pulses%100==0);
+            }
+        } else ++damage_dropped;
+    }
     if (atomic_exchange(&vibration_test_requested,0)) {
+        damage_strength=0; damage_until=0;
         pad_log_device(stdout,g,"F8-test-device");
         pad_log(stdout,"F8 test bypasses guest requests: low motor 1s, high motor 1s, then restore current guest output");
         if (g) {
@@ -427,6 +491,17 @@ static int aegis_controls;
 /* Selected before guest threads start; do not inherit Bloodborne's combat bindings. */
 void runtime_pad_configure(const char *serial) {
     aegis_controls=serial && !strcmp(serial,"CUSA18093");
+    damage_rumble_enabled=aegis_controls;
+    const char *path=getenv("BB_CONFIG");
+    FILE *f=path ? fopen(path,"r") : NULL;
+    if (f) {
+        char line[512],key[80],value[80];
+        while (fgets(line,sizeof line,f))
+            if (sscanf(line," %79[^= ] = %79s",key,value)==2 && !strcmp(key,"damage_rumble"))
+                damage_rumble_enabled=aegis_controls && strcmp(value,"0");
+        fclose(f);
+    }
+    pad_log(stdout,"damage-feedback configuration enabled=%d (PC addition; player HP loss only)",damage_rumble_enabled);
 }
 
 static void bind_defaults(void) {

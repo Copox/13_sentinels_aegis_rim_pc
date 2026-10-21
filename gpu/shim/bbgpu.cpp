@@ -8,6 +8,7 @@
 #include "bbport_settings.h"
 #include "game_profile.h"
 #include "aegis_save_thumbnail.h"
+#include "aegis_damage_rumble.h"
 #include "bbport_copy.h"
 #include <sys/resource.h>
 #include "bbport_free_check.h"
@@ -337,6 +338,7 @@ extern "C" int bbgpu_handle_fault(void* ucontext, void* address) {
 
 extern "C" void bbgpu_patch_image(unsigned char* image, uint64_t size) {
     AegisSaveThumbnail::PatchImage(image, size);
+    AegisDamageRumble::PatchImage(image, size);
     const auto* profile = Game::Active();
     if (!profile || std::strcmp(profile->name, "Bloodborne") != 0) {
         std::printf("Game hooks: no Bloodborne patches for the active game\n");

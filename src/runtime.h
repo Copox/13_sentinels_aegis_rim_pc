@@ -120,6 +120,8 @@ uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_configure(const char *serial);
+/* Optional PC feedback, fed only by the verified player HP damage commit hook. */
+void runtime_pad_player_damage(int pilot, int before, int after, int maximum);
 void runtime_pad_report(void);
 uintptr_t runtime_rtc_resolve(const char *name);
 const char *runtime_file_user_dir(void);
