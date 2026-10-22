@@ -11,6 +11,12 @@ Linux x86-64 运行时，面向 CUSA18093，需要 Vulkan。
 不包含游戏程序、固件、密钥、PRX 模块、游戏美术、音乐或存档。启动器使用原创项目素材，
 仅接受资源清单支持的文件集。
 
+## 下载
+
+最新版本：**v1.1.0**（[发布页](https://github.com/kxn/13_sentinels_aegis_rim_pc/releases/latest)）。
+Windows 下载 `aegis-windows.zip`，Linux 下载 `aegis-linux.tar.gz`。
+变更见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 编译
 
 在 Debian 13 或相近 Linux 环境安装 Rust 1.85.1+，然后执行：

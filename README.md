@@ -11,6 +11,12 @@ An experimental Windows x64 / Linux x86-64 runtime for CUSA18093, based on
 No game executable, firmware, keys, PRX modules, game artwork, music or saves are included.
 The launcher uses original project artwork. Only the supported file set is accepted.
 
+## Download
+
+Latest release: **v1.1.0** ([releases](https://github.com/kxn/13_sentinels_aegis_rim_pc/releases/latest)).
+Download `aegis-windows.zip` on Windows or `aegis-linux.tar.gz` on Linux.
+See [CHANGELOG.md](CHANGELOG.md) for changes.
+
 ## Build
 
 On Debian 13 or a comparable Linux environment, install Rust 1.85.1+ and:
