@@ -91,6 +91,8 @@ struct Settings {
     fs::path root;
     std::string folder;
     int resolution = 0, refresh = 0, preset = 0;
+    // PS4 system language for the game's text: 11 = Simplified, 10 = Traditional Chinese.
+    int language = 11;
     int custom_refresh = 180;
     bool fullscreen = false, vsync = true;
     bool damage_rumble = true;
@@ -166,6 +168,12 @@ struct Settings {
             gain = 1;
         if (!runtime.contains("audio_mix_version") && gain == 2)
             gain = 1; // Retire the old automatic 200% compensation once.
+        language = 11;
+        try {
+            if (std::stoi(runtime.at("language")) == 10)
+                language = 10;
+        } catch (...) {
+        }
     }
     std::string Binding(int i, bool pad) const {
         std::string k = std::string(pad ? "pad." : "key.") + Actions[i].id;
@@ -196,8 +204,13 @@ struct Settings {
             return false;
         auto p = GamePath();
         std::error_code ec;
-        return fs::is_regular_file(p / "eboot.bin", ec) &&
-               fs::is_regular_file(p / "ROBO_CN.CPK", ec);
+        bool ok = fs::is_regular_file(p / "eboot.bin", ec) &&
+                  fs::is_regular_file(p / "ROBO_CN.CPK", ec) &&
+                  fs::is_regular_file(p / "ROBO_PATCH2_CN.CPK", ec);
+        if (language == 10)
+            ok = ok && fs::is_regular_file(p / "ROBO_TW.CPK", ec) &&
+                 fs::is_regular_file(p / "ROBO_PATCH2_TW.CPK", ec);
+        return ok;
     }
     void Save() {
         NormalizeFolder();
@@ -205,6 +218,7 @@ struct Settings {
         runtime["render_mode"] = resolution == 2 ? "pro" : "base";
         runtime["audio_gain"] = std::to_string(gain);
         runtime["audio_mix_version"] = "1";
+        runtime["language"] = std::to_string(language);
         runtime["damage_rumble"] = damage_rumble ? "1" : "0";
         custom_refresh = std::clamp(custom_refresh, 30, 1000);
         runtime["display_fps"] = std::to_string(refresh == 6 ? custom_refresh : Rates[refresh]);

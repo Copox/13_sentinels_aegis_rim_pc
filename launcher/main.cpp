@@ -649,7 +649,19 @@ void Draw() {
         if (ImGui::Button("浏览…", {-1, 0}))
             PickPath(0);
         if (!settings.ValidGame())
-            ImGui::TextColored(ImVec4(1, .68f, .35f, 1), "请选择游戏目录");
+            ImGui::TextColored(ImVec4(1, .68f, .35f, 1),
+                               "游戏目录不完整：需要 eboot.bin 与所选语言的 CPK");
+        ImGui::Spacing();
+        ImGui::TextUnformatted("游戏语言");
+        const char *languages[] = {"简体中文", "繁体中文"};
+        int language_choice = settings.language == 10 ? 1 : 0;
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::Combo("##language", &language_choice, languages, 2)) {
+            settings.language = language_choice == 1 ? 10 : 11;
+            dirty = true;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("决定游戏文本语言；重启游戏后生效");
         ImGui::Spacing();
         ImGui::TextUnformatted("画面分辨率");
         const char *res[] = {"1080p  ·  标准", "1440p  ·  兼容模式", "4K  ·  原生 Pro", "4K  ·  兼容模式"};

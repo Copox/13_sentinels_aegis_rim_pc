@@ -91,6 +91,14 @@ def main():
             env['BB_FPS_LIMIT'] = '0'
         if 'display_vsync' in values:
             env['BB_PRESENT_MODE'] = 'Fifo' if values['display_vsync'] != '0' else 'Immediate'
+        if 'language' in values:
+            try:
+                language = int(values['language'])
+            except ValueError:
+                parser.error('language must be 10 (Traditional Chinese) or 11 (Simplified Chinese)')
+            if language not in (10, 11):
+                parser.error('language must be 10 (Traditional Chinese) or 11 (Simplified Chinese)')
+            env['BB_LANGUAGE'] = str(language)
     for icon in (ROOT / 'assets/aegis.bmp', ROOT / 'out/aegis.bmp'):
         if icon.is_file():
             env['BB_WINDOW_ICON'] = str(icon)

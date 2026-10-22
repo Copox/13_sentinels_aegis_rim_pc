@@ -2,6 +2,7 @@
 This project is only for running games you own on PC. Do not distribute pirated games. Please support official releases.
 
 打开 AegisLauncher.exe，选择自己拥有的受支持 CUSA18093 游戏目录，设置选项后开始。
+启动设置的“游戏语言”可选择简体中文或繁体中文，切换后重新启动游戏生效；目录需含全部六个 CPK。
 “导入 PKG”仅支持已经可解密的游戏包，不解密加密零售包，不合并更新。
 Enter/F 确认，Space/Backspace 返回，WASD 移动，方向键选择，Esc 打开菜单。
 Alt+Enter 切换全屏，F10 开关状态面板，游戏逻辑固定 60Hz。
