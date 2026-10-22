@@ -160,6 +160,9 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
 #endif
     // Gamepads are sampled by runtime_pad.c; their events are pumped here with the window's.
+    // A pad connected after launch must work even if the window is not focused yet (loading,
+    // alt-tab): SDL otherwise keeps its button state at zero until focus returns.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
@@ -482,6 +485,9 @@ bool WindowSDL::PollEvents() {
             break;
         }
     }
+    // runtime_pad.c samples the gamepad from the game thread; keep its state current here, on the
+    // thread that pumps events, including a gamepad that was connected after startup.
+    SDL_UpdateGamepads();
     // A request from the game's side (runtime_pad.c: the spray can taken): as a click would.
     if (fullscreen_requested.exchange(false, std::memory_order_relaxed) &&
         !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN)) ToggleFullscreen();

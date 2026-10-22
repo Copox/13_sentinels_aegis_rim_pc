@@ -56,8 +56,10 @@ Select your own extracted CUSA18093 folder; placing it beside the launcher also 
 The Import PKG tab accepts supported, already-decryptable packages you own; it cannot
 decrypt retail packages or combine updates. File verification must pass before launch.
 
-Choose resolution, fullscreen, display refresh, game text language (Simplified or Traditional
-Chinese), volume and input mappings, then start.
+The launcher and game languages follow the system by default; the launcher can switch between
+Simplified Chinese, Traditional Chinese and English, and the game text between Simplified Chinese,
+Traditional Chinese and Korean. Choose resolution, fullscreen, display refresh, volume and input
+mappings, then start.
 Game logic stays at 60 Hz. Enter/F confirms; Space/Backspace cancels; WASD moves;
 arrow keys select; Esc opens the menu; Alt+Enter toggles fullscreen; F10 toggles statistics.
 SDL3 gamepads support hot-plugging. The gamepad tab also offers optional PC-added rumble

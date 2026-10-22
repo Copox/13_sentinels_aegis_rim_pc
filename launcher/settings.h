@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include "i18n.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -45,11 +47,11 @@ inline void Write(const fs::path &p, const Ini &m) {
             f << k << '=' << v << '\n';
         f.flush();
         if (!f)
-            throw std::runtime_error("无法保存设置：" + Utf8(p));
+            throw std::runtime_error(I18n::Tr("无法保存设置：") + Utf8(p));
     }
 #ifdef _WIN32
     if (!MoveFileExW(tmp.c_str(), p.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        throw std::runtime_error("无法替换设置文件：" + Utf8(p));
+        throw std::runtime_error(I18n::Tr("无法替换设置文件：") + Utf8(p));
 #else
     fs::rename(tmp, p);
 #endif
@@ -86,13 +88,75 @@ inline constexpr std::array<Action, 25> Actions{
      {"look_down", "右摇杆 ↓", "K", ""},
      {"look_left", "右摇杆 ←", "J", ""},
      {"look_right", "右摇杆 →", "L", ""}}};
+inline std::string LowerAscii(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return char(std::tolower(c)); });
+    return s;
+}
+// The user's UI locale. LC_ALL=C must not hide a useful LANG (SSH and some shells set it).
+inline std::string SystemLocale() {
+    for (const char *name : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
+        const char *value = std::getenv(name);
+        if (!value || !*value)
+            continue;
+        std::string s = LowerAscii(value);
+        if (s == "c" || s == "posix" || s == "c.utf-8")
+            continue;
+        return s;
+    }
+    return {};
+}
+inline std::string SystemUiLanguage() {
+#ifdef _WIN32
+    switch (GetUserDefaultUILanguage()) {
+    case 0x0404: // zh-TW
+    case 0x0C04: // zh-HK
+    case 0x1404: // zh-MO
+        return "zh_TW";
+    case 0x0804: // zh-CN
+    case 0x1004: // zh-SG
+        return "zh_CN";
+    default:
+        return "en";
+    }
+#else
+    const std::string s = SystemLocale();
+    if (s.rfind("zh_tw", 0) == 0 || s.rfind("zh_hk", 0) == 0 || s.rfind("zh_mo", 0) == 0)
+        return "zh_TW";
+    if (s.rfind("zh", 0) == 0)
+        return "zh_CN";
+    return "en";
+#endif
+}
+// The game's text language follows the same locale: 9 Korean, 10 Traditional, 11 Simplified.
+inline int SystemGameLanguage() {
+#ifdef _WIN32
+    switch (GetUserDefaultUILanguage()) {
+    case 0x0404:
+    case 0x0C04:
+    case 0x1404:
+        return 10;
+    case 0x0412:
+        return 9;
+    default:
+        return 11;
+    }
+#else
+    const std::string s = SystemLocale();
+    if (s.rfind("zh_tw", 0) == 0 || s.rfind("zh_hk", 0) == 0 || s.rfind("zh_mo", 0) == 0)
+        return 10;
+    if (s.rfind("ko", 0) == 0)
+        return 9;
+    return 11;
+#endif
+}
 struct Settings {
     Ini runtime, launcher;
     fs::path root;
     std::string folder;
     int resolution = 0, refresh = 0, preset = 0;
-    // PS4 system language for the game's text: 11 = Simplified, 10 = Traditional Chinese.
-    int language = 11;
+    // "auto" follows the system; the game values are PS4 language codes 9/10/11.
+    std::string ui_language = "auto", game_language = "auto";
     int custom_refresh = 180;
     bool fullscreen = false, vsync = true;
     bool damage_rumble = true;
@@ -103,6 +167,18 @@ struct Settings {
     fs::path GamePath() const {
         auto p = fs::u8path(folder);
         return (p.is_absolute() ? p : root / p).lexically_normal();
+    }
+    std::string UiLanguage() const {
+        return ui_language == "auto" ? SystemUiLanguage() : ui_language;
+    }
+    int GameLanguage() const {
+        if (game_language == "10")
+            return 10;
+        if (game_language == "9")
+            return 9;
+        if (game_language == "11")
+            return 11;
+        return SystemGameLanguage();
     }
     void NormalizeFolder() {
         if (folder.empty())
@@ -168,12 +244,17 @@ struct Settings {
             gain = 1;
         if (!runtime.contains("audio_mix_version") && gain == 2)
             gain = 1; // Retire the old automatic 200% compensation once.
-        language = 11;
-        try {
-            if (std::stoi(runtime.at("language")) == 10)
-                language = 10;
-        } catch (...) {
-        }
+        ui_language = launcher.contains("ui_language") ? launcher["ui_language"] : "auto";
+        if (ui_language != "zh_CN" && ui_language != "zh_TW" && ui_language != "en")
+            ui_language = "auto";
+        if (launcher.contains("game_language"))
+            game_language = launcher["game_language"];
+        else if (runtime.contains("language"))
+            game_language = runtime["language"]; // migrate the old numeric setting once
+        else
+            game_language = "auto";
+        if (game_language != "11" && game_language != "10" && game_language != "9")
+            game_language = "auto";
     }
     std::string Binding(int i, bool pad) const {
         std::string k = std::string(pad ? "pad." : "key.") + Actions[i].id;
@@ -204,12 +285,16 @@ struct Settings {
             return false;
         auto p = GamePath();
         std::error_code ec;
+        const int language = GameLanguage();
         bool ok = fs::is_regular_file(p / "eboot.bin", ec) &&
                   fs::is_regular_file(p / "ROBO_CN.CPK", ec) &&
                   fs::is_regular_file(p / "ROBO_PATCH2_CN.CPK", ec);
         if (language == 10)
             ok = ok && fs::is_regular_file(p / "ROBO_TW.CPK", ec) &&
                  fs::is_regular_file(p / "ROBO_PATCH2_TW.CPK", ec);
+        else if (language == 9)
+            ok = ok && fs::is_regular_file(p / "ROBO_KO.CPK", ec) &&
+                 fs::is_regular_file(p / "ROBO_PATCH2_KO.CPK", ec);
         return ok;
     }
     void Save() {
@@ -218,7 +303,7 @@ struct Settings {
         runtime["render_mode"] = resolution == 2 ? "pro" : "base";
         runtime["audio_gain"] = std::to_string(gain);
         runtime["audio_mix_version"] = "1";
-        runtime["language"] = std::to_string(language);
+        runtime["language"] = std::to_string(GameLanguage());
         runtime["damage_rumble"] = damage_rumble ? "1" : "0";
         custom_refresh = std::clamp(custom_refresh, 30, 1000);
         runtime["display_fps"] = std::to_string(refresh == 6 ? custom_refresh : Rates[refresh]);
@@ -226,6 +311,8 @@ struct Settings {
         launcher["game_folder"] = folder;
         launcher["fullscreen"] = fullscreen ? "1" : "0";
         launcher["controller_preset"] = std::to_string(preset);
+        launcher["ui_language"] = ui_language;
+        launcher["game_language"] = game_language;
         Write(root / "user/aegis.ini", runtime);
         Write(root / "user/launcher.ini", launcher);
     }

@@ -4,6 +4,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include "settings.h"
+#include "i18n.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include "../src/pad_diagnostics.h"
@@ -92,7 +93,7 @@ bool Save() {
     try {
         settings.Save();
         dirty = false;
-        status = "设置已保存";
+        status = I18n::Tr("设置已保存");
         return true;
     } catch (const std::exception &e) {
         Error(e.what());
@@ -102,7 +103,7 @@ bool Save() {
 bool Spawn(const fs::path &exe, const std::vector<std::string> &args) {
 #ifdef _WIN32
     if (!fs::exists(exe)) {
-        Error("启动组件缺失：" + Utf8(exe));
+        Error(I18n::Tr("启动组件缺失：") + Utf8(exe));
         return false;
     }
     std::wstring command = Quote(exe.wstring());
@@ -127,7 +128,7 @@ bool Spawn(const fs::path &exe, const std::vector<std::string> &args) {
     if (input != INVALID_HANDLE_VALUE)
         CloseHandle(input);
     if (!ok) {
-        Error("无法启动组件，请检查文件和目录权限。");
+        Error(I18n::Tr("无法启动组件，请检查文件和目录权限。"));
         return false;
     }
     CloseHandle(pi.hThread);
@@ -147,7 +148,7 @@ bool Spawn(const fs::path &exe, const std::vector<std::string> &args) {
     posix_spawn_file_actions_destroy(&fa);
     if (result) {
         child = 0;
-        Error("无法启动运行组件。");
+        Error(I18n::Tr("无法启动运行组件。"));
         return false;
     }
 #endif
@@ -184,12 +185,12 @@ bool Running() {
             dirty = true;
             Save();
             tab = 0;
-            status = "PKG 导入完成 · 可以开始游戏";
+            status = I18n::Tr("PKG 导入完成 · 可以开始游戏");
             import_message = status;
         } else {
             import_message = state.contains("error") ? state["error"]
-                                                     : "导入失败，请查看日志：" + Utf8(last_log);
-            status = "PKG 导入失败";
+                                                     : I18n::Tr("导入失败，请查看日志：") + Utf8(last_log);
+            status = I18n::Tr("PKG 导入失败");
         }
     } else {
         SDL_ShowWindow(window);
@@ -198,13 +199,13 @@ bool Running() {
             auto check = Read(launch_output / "image/verification.ini");
             if (check["phase"] == "error") {
                 launch_error = check["error"];
-                status = "游戏文件校验失败 · 已停止启动";
+                status = I18n::Tr("游戏文件校验失败 · 已停止启动");
             } else {
-                launch_error = "启动准备未完成，请查看日志：" + Utf8(last_log);
-                status = "游戏未能启动 · 请查看 logs";
+                launch_error = I18n::Tr("启动准备未完成，请查看日志：") + Utf8(last_log);
+                status = I18n::Tr("游戏未能启动 · 请查看 logs");
             }
             launching = false;
-        } else status = code == 0 ? "游戏已退出 · 日志已保存" : "游戏未正常启动或退出 · 请查看 logs";
+        } else status = code == 0 ? I18n::Tr("游戏已退出 · 日志已保存") : I18n::Tr("游戏未正常启动或退出 · 请查看 logs");
     }
     ResumeControllers();
     return false;
@@ -213,7 +214,7 @@ void Start() {
     if (child)
         return;
     if (!fs::is_directory(settings.GamePath())) {
-        Error("请选择存在的游戏目录。");
+        Error(I18n::Tr("请选择存在的游戏目录。"));
         return;
     }
     if (!Save())
@@ -249,7 +250,7 @@ void Start() {
         launch_output = out;
         launching = true;
         launch_error.clear();
-        status = "正在检查游戏文件…";
+        status = I18n::Tr("正在检查游戏文件…");
     } else ResumeControllers();
 }
 void PickPath(int kind) {
@@ -272,13 +273,13 @@ void StartImport() {
     if (child)
         return;
     if (pkg_file.empty() || import_folder.empty()) {
-        import_message = "请选择 PKG 文件和解包目录。";
+        import_message = I18n::Tr("请选择 PKG 文件和解包目录。");
         return;
     }
     auto p = fs::u8path(import_folder);
     import_destination = (p.is_absolute() ? p : settings.root / p).lexically_normal();
     if (fs::exists(import_destination)) {
-        import_message = "目标目录已存在，请选择新的目录；不会覆盖已有游戏。";
+        import_message = I18n::Tr("目标目录已存在，请选择新的目录；不会覆盖已有游戏。");
         return;
     }
     auto id = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
@@ -296,7 +297,7 @@ void StartImport() {
         Utf8(import_progress), Utf8(settings.root / "profiles/CUSA18093.json"),
         Utf8(settings.root / "user/verification-cache")};
     importing = Spawn(exe, args);
-    import_message = importing ? "正在读取 PKG…" : "无法启动解包组件";
+    import_message = importing ? I18n::Tr("正在读取 PKG…") : I18n::Tr("无法启动解包组件");
 }
 void CancelImport() {
     if (!importing || !child)
@@ -314,35 +315,35 @@ void CancelImport() {
     importing = false;
     std::error_code ec;
     fs::remove_all(import_stage, ec);
-    import_message = ec ? "已停止导入，临时目录未能删除：" + Utf8(import_stage)
-                        : "已取消导入，原有游戏保持不变。";
+    import_message = ec ? I18n::Tr("已停止导入，临时目录未能删除：") + Utf8(import_stage)
+                        : I18n::Tr("已取消导入，原有游戏保持不变。");
 }
 void ImportPage() {
-    ImGui::TextUnformatted("从 PKG 导入游戏");
+    ImGui::TextUnformatted(I18n::Tr("从 PKG 导入游戏"));
     ImGui::TextDisabled(
-        "选择 CUSA18093 完整本体包，解包后自动选中游戏目录。更新包、DLC 或无法解密的包不支持。");
+        I18n::Tr("选择 CUSA18093 完整本体包，解包后自动选中游戏目录。更新包、DLC 或无法解密的包不支持。"));
     ImGui::Spacing();
     ImGui::BeginDisabled(importing);
     char file[4096];
     SDL_strlcpy(file, pkg_file.c_str(), sizeof(file));
-    ImGui::TextUnformatted("PKG 文件");
+    ImGui::TextUnformatted(I18n::Tr("PKG 文件"));
     ImGui::SetNextItemWidth(-110);
     if (ImGui::InputText("##pkg", file, sizeof(file)))
         pkg_file = file;
     ImGui::SameLine();
-    if (ImGui::Button("选择…", {-1, 0}))
+    if (ImGui::Button(I18n::Tr("选择…"), {-1, 0}))
         PickPath(1);
     char folder[4096];
     SDL_strlcpy(folder, import_folder.c_str(), sizeof(folder));
-    ImGui::TextUnformatted("解包到新目录");
+    ImGui::TextUnformatted(I18n::Tr("解包到新目录"));
     ImGui::SetNextItemWidth(-110);
     if (ImGui::InputText("##destination", folder, sizeof(folder)))
         import_folder = folder;
     ImGui::SameLine();
-    if (ImGui::Button("位置…", {-1, 0}))
+    if (ImGui::Button(I18n::Tr("位置…"), {-1, 0}))
         PickPath(2);
-    ImGui::TextDisabled("默认放在 Launcher 旁边的 CUSA18093。请预留解包空间；已有目录不会被覆盖。");
-    if (ImGui::Button("开始导入 PKG"))
+    ImGui::TextDisabled(I18n::Tr("默认放在 Launcher 旁边的 CUSA18093。请预留解包空间；已有目录不会被覆盖。"));
+    if (ImGui::Button(I18n::Tr("开始导入 PKG")))
         StartImport();
     ImGui::EndDisabled();
     if (importing) {
@@ -350,17 +351,17 @@ void ImportPage() {
         float done = std::strtof(state["done"].c_str(), nullptr),
               total = std::strtof(state["total"].c_str(), nullptr);
         const auto phase = state["phase"];
-        const char *label = phase == "verify"    ? "校验游戏文件…"
-                            : phase == "extract" ? "正在解包…"
-                                                 : "读取包与文件系统…";
+        const char *label = phase == "verify"    ? I18n::Tr("校验游戏文件…")
+                            : phase == "extract" ? I18n::Tr("正在解包…")
+                                                 : I18n::Tr("读取包与文件系统…");
         ImGui::TextUnformatted(label);
         double bytes = std::strtod(state["bytes"].c_str(), nullptr),
                all_bytes = std::strtod(state["total_bytes"].c_str(), nullptr);
         ImGui::ProgressBar(phase == "verify" && all_bytes > 0 ? float(bytes / all_bytes) : total > 0 ? done / total : 0, {-1, 0});
-        ImGui::Text("已完成 %.0f / %.0f 个资源文件", done, total);
+        ImGui::Text(I18n::Tr("已完成 %.0f / %.0f 个资源文件"), done, total);
         ImGui::TextDisabled("%s", state["file"].c_str());
-        if (phase == "verify") ImGui::TextDisabled("已校验 %.2f / %.2f GB", bytes / 1e9, all_bytes / 1e9);
-        if (ImGui::Button("取消导入"))
+        if (phase == "verify") ImGui::TextDisabled(I18n::Tr("已校验 %.2f / %.2f GB"), bytes / 1e9, all_bytes / 1e9);
+        if (ImGui::Button(I18n::Tr("取消导入")))
             CancelImport();
     } else if (!import_message.empty())
         ImGui::TextWrapped("%s", import_message.c_str());
@@ -413,23 +414,23 @@ void TickRumbleTest() {
     if (!p) {
         pad_log(controller_log,"launcher test device id=%u disconnected",(unsigned)rumble_test_id);
         rumble_test_phase = 0;
-        rumble_message = "测试中断：手柄已断开";
+        rumble_message = I18n::Tr("测试中断：手柄已断开");
     } else if (rumble_test_phase == 1) {
         const bool ok = pad_log_rumble(controller_log,p,"launcher-high-motor",0,0xffff,1000);
         rumble_test_failed |= !ok;
         rumble_test_phase = 2;
         rumble_test_deadline = SDL_GetTicks() + 1100;
-        rumble_message = ok ? "高频马达测试中…" : std::string("高频震动失败：") + SDL_GetError();
+        rumble_message = ok ? I18n::Tr("高频马达测试中…") : std::string(I18n::Tr("高频震动失败：")) + SDL_GetError();
     } else {
         pad_log_rumble(controller_log,p,"launcher-test-stop",0,0,0);
         rumble_test_phase = 0;
-        rumble_message = rumble_test_failed ? "测试结束 · 至少一个震动请求失败，请查看日志"
-            : "SDL 已接受两次请求 · 请确认实际震动情况";
+        rumble_message = rumble_test_failed ? I18n::Tr("测试结束 · 至少一个震动请求失败，请查看日志")
+            : I18n::Tr("SDL 已接受两次请求 · 请确认实际震动情况");
     }
 }
 std::string KeyLabel(std::string s) {
     if (s.empty())
-        return "未绑定";
+        return I18n::Tr("未绑定");
     std::stringstream in(s);
     std::string item, result;
     while (std::getline(in, item, ',')) {
@@ -460,25 +461,26 @@ std::string PadLabel(const std::string &s) {
         {"dpup", "十字键 ↑"},       {"dpdown", "十字键 ↓"},      {"dpleft", "十字键 ←"},
         {"dpright", "十字键 →"}};
     auto it = names.find(s);
-    return s.empty() ? "未绑定" : it == names.end() ? s : it->second;
+    return s.empty() ? std::string(I18n::Tr("未绑定"))
+                     : it == names.end() ? s : std::string(I18n::Tr(it->second.c_str()));
 }
 void Mappings(bool pad) {
     if (pad) {
-        const char *presets[] = {"Xbox 标准位置", "PlayStation 标准位置", "Xbox 确认 / 返回互换",
-                                 "Nintendo 字母习惯", "自定义映射"};
+        const char *presets[] = {I18n::Tr("Xbox 标准位置"), I18n::Tr("PlayStation 标准位置"), I18n::Tr("Xbox 确认 / 返回互换"),
+                                 I18n::Tr("Nintendo 字母习惯"), I18n::Tr("自定义映射")};
         ImGui::SetNextItemWidth(-1);
         if (ImGui::Combo("##preset", &settings.preset, presets, 5)) {
             if (settings.preset < 4)
                 settings.Preset(settings.preset);
             dirty = true;
         }
-        ImGui::TextDisabled("连接后自动识别；摇杆按位置对应，下面可改按钮与扳机。");
+        ImGui::TextDisabled(I18n::Tr("连接后自动识别；摇杆按位置对应，下面可改按钮与扳机。"));
         if (controllers.empty())
-            ImGui::TextColored({.85f, .7f, .44f, 1}, "当前未连接手柄 · 键盘仍可使用");
+            ImGui::TextColored({.85f, .7f, .44f, 1}, I18n::Tr("当前未连接手柄 · 键盘仍可使用"));
         else {
-            ImGui::Text("已连接：%s", SDL_GetGamepadName(controllers.front()));
+            ImGui::Text(I18n::Tr("已连接：%s"), SDL_GetGamepadName(controllers.front()));
             ImGui::BeginDisabled(rumble_test_phase != 0);
-            if (ImGui::Button("测试震动 · 两个马达")) {
+            if (ImGui::Button(I18n::Tr("测试震动 · 两个马达"))) {
                 auto *p = controllers.front();
                 pad_log_device(controller_log,p,"launcher-test-device");
                 pad_log_rumble(controller_log,p,"launcher-test-reset",0,0,0);
@@ -487,14 +489,14 @@ void Mappings(bool pad) {
                 rumble_test_id = SDL_GetGamepadID(p);
                 rumble_test_phase = 1;
                 rumble_test_deadline = SDL_GetTicks() + 1100;
-                rumble_message = ok ? "低频马达测试中…" : std::string("低频震动失败：") + SDL_GetError();
+                rumble_message = ok ? I18n::Tr("低频马达测试中…") : std::string(I18n::Tr("低频震动失败：")) + SDL_GetError();
             }
             ImGui::EndDisabled();
             ImGui::TextWrapped("%s", rumble_message.c_str());
         }
-        ImGui::TextDisabled("游戏内按 F8 独立测试震动；诊断记录在 logs/controller-*.log");
-        if (ImGui::Checkbox("主角机兵受伤震动（PC 新增）", &settings.damage_rumble)) dirty = true;
-        if (ImGui::Button("打开手柄日志目录")) {
+        ImGui::TextDisabled(I18n::Tr("游戏内按 F8 独立测试震动；诊断记录在 logs/controller-*.log"));
+        if (ImGui::Checkbox(I18n::Tr("主角机兵受伤震动（PC 新增）"), &settings.damage_rumble)) dirty = true;
+        if (ImGui::Button(I18n::Tr("打开手柄日志目录"))) {
             const std::string url = "file://" + Utf8(settings.root / "logs");
 #ifdef _WIN32
             ShellExecuteW(nullptr,L"open",(settings.root / "logs").c_str(),nullptr,nullptr,SW_SHOWNORMAL);
@@ -503,19 +505,19 @@ void Mappings(bool pad) {
 #endif
         }
     } else {
-        if (ImGui::Button("恢复默认键盘")) {
+        if (ImGui::Button(I18n::Tr("恢复默认键盘"))) {
             for (int i = 0; i < 25; ++i)
                 settings.SetBinding(i, false, Actions[i].key);
             dirty = true;
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("点击按键后输入；支持 Ctrl / Shift 组合键。");
+        ImGui::TextDisabled(I18n::Tr("点击按键后输入；支持 Ctrl / Shift 组合键。"));
     }
     ImGui::Spacing();
     if (ImGui::BeginTable("bindings", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
                           ImVec2(0, -62))) {
-        ImGui::TableSetupColumn("游戏操作", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-        ImGui::TableSetupColumn(pad ? "手柄按钮" : "键盘按键", ImGuiTableColumnFlags_WidthStretch,
+        ImGui::TableSetupColumn(I18n::Tr("游戏操作"), ImGuiTableColumnFlags_WidthStretch, 1.1f);
+        ImGui::TableSetupColumn(pad ? I18n::Tr("手柄按钮") : I18n::Tr("键盘按键"), ImGuiTableColumnFlags_WidthStretch,
                                 1.3f);
         ImGui::TableSetupColumn("##clear", ImGuiTableColumnFlags_WidthFixed, 60);
         ImGui::TableHeadersRow();
@@ -524,27 +526,28 @@ void Mappings(bool pad) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(Actions[i].title);
+            ImGui::TextUnformatted(I18n::Tr(Actions[i].title));
             ImGui::TableNextColumn();
             std::string text =
                 pad ? PadLabel(settings.Binding(i, true)) : KeyLabel(settings.Binding(i, false));
             if (ImGui::Button((text + "##bind").c_str(), {-1, 0})) {
                 capture = i;
                 capture_pad = pad;
-                ImGui::OpenPopup("等待输入");
+                ImGui::OpenPopup(I18n::Tr("等待输入"));
             }
-            if (ImGui::BeginPopupModal("等待输入", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("%s：%s", pad ? "手柄映射" : "键盘映射", Actions[i].title);
-                ImGui::TextUnformatted(pad ? "按下手柄上的按钮或扳机" : "按下新按键，Esc 取消");
-                ImGui::TextDisabled("当前绑定会被替换，其他操作不变。");
-                if (capture < 0 || ImGui::Button("取消")) {
+            if (ImGui::BeginPopupModal(I18n::Tr("等待输入"), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("%s: %s", pad ? I18n::Tr("手柄映射") : I18n::Tr("键盘映射"),
+                            I18n::Tr(Actions[i].title));
+                ImGui::TextUnformatted(pad ? I18n::Tr("按下手柄上的按钮或扳机") : I18n::Tr("按下新按键，Esc 取消"));
+                ImGui::TextDisabled(I18n::Tr("当前绑定会被替换，其他操作不变。"));
+                if (capture < 0 || ImGui::Button(I18n::Tr("取消"))) {
                     capture = -1;
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();
             }
             ImGui::TableNextColumn();
-            if (ImGui::SmallButton("清除")) {
+            if (ImGui::SmallButton(I18n::Tr("清除"))) {
                 settings.SetBinding(i, pad, "");
                 dirty = true;
             }
@@ -617,10 +620,10 @@ void Draw() {
     float panel_w = tab == 0 ? std::min(w * .64f, std::max(w * .39f, 540.f)) : w * .64f;
     ImGui::SetNextWindowPos({w * .04f, h * .30f});
     ImGui::SetNextWindowSize({panel_w, h * .65f});
-    ImGui::Begin("设置", nullptr,
+    ImGui::Begin(I18n::Tr("设置"), nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoMove);
-    const char *tabs[] = {"启动设置", "手柄映射", "键盘映射", "导入 PKG"};
+    const char *tabs[] = {I18n::Tr("启动设置"), I18n::Tr("手柄映射"), I18n::Tr("键盘映射"), I18n::Tr("导入 PKG")};
     for (int i = 0; i < 4; ++i) {
         if (i)
             ImGui::SameLine();
@@ -637,7 +640,7 @@ void Draw() {
     ImGui::BeginChild("settings-body", {0, -(ImGui::GetFrameHeight() + 22)}, ImGuiChildFlags_None);
     ImGui::PushTextWrapPos(0);
     if (tab == 0) {
-        ImGui::TextUnformatted("游戏所在目录");
+        ImGui::TextUnformatted(I18n::Tr("游戏所在目录"));
         char path[4096];
         SDL_strlcpy(path, settings.folder.c_str(), sizeof(path));
         ImGui::SetNextItemWidth(-110);
@@ -646,40 +649,65 @@ void Draw() {
             dirty = true;
         }
         ImGui::SameLine();
-        if (ImGui::Button("浏览…", {-1, 0}))
+        if (ImGui::Button(I18n::Tr("浏览…"), {-1, 0}))
             PickPath(0);
         if (!settings.ValidGame())
             ImGui::TextColored(ImVec4(1, .68f, .35f, 1),
-                               "游戏目录不完整：需要 eboot.bin 与所选语言的 CPK");
+                               I18n::Tr("游戏目录不完整：需要 eboot.bin 与所选语言的 CPK"));
         ImGui::Spacing();
-        ImGui::TextUnformatted("游戏语言");
-        const char *languages[] = {"简体中文", "繁体中文"};
-        int language_choice = settings.language == 10 ? 1 : 0;
+        ImGui::TextUnformatted(I18n::Tr("界面语言"));
+        const char *ui_languages[] = {I18n::Tr("跟随系统"), "简体中文", "繁體中文", "English"};
+        int ui_choice = settings.ui_language == "zh_CN"   ? 1
+                        : settings.ui_language == "zh_TW" ? 2
+                        : settings.ui_language == "en"    ? 3
+                                                          : 0;
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::Combo("##language", &language_choice, languages, 2)) {
-            settings.language = language_choice == 1 ? 10 : 11;
+        if (ImGui::Combo("##ui-language", &ui_choice, ui_languages, 4)) {
+            settings.ui_language = ui_choice == 1   ? "zh_CN"
+                                   : ui_choice == 2 ? "zh_TW"
+                                   : ui_choice == 3 ? "en"
+                                                    : "auto";
+            I18n::SetLanguage(I18n::FromCode(settings.UiLanguage()));
             dirty = true;
         }
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("决定游戏文本语言；重启游戏后生效");
+            ImGui::SetTooltip(I18n::Tr("启动器界面语言；切换后立即生效"));
         ImGui::Spacing();
-        ImGui::TextUnformatted("画面分辨率");
-        const char *res[] = {"1080p  ·  标准", "1440p  ·  兼容模式", "4K  ·  原生 Pro", "4K  ·  兼容模式"};
+        ImGui::TextUnformatted(I18n::Tr("游戏语言"));
+        const char *game_languages[] = {I18n::Tr("跟随系统"), I18n::Tr("简体中文"),
+                                        I18n::Tr("繁体中文"), "한국어"};
+        int game_choice = settings.game_language == "11"   ? 1
+                          : settings.game_language == "10" ? 2
+                          : settings.game_language == "9"  ? 3
+                                                           : 0;
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::Combo("##game-language", &game_choice, game_languages, 4)) {
+            settings.game_language = game_choice == 1   ? "11"
+                                     : game_choice == 2 ? "10"
+                                     : game_choice == 3 ? "9"
+                                                        : "auto";
+            dirty = true;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(I18n::Tr("决定游戏文本语言；重启游戏后生效"));
+        ImGui::Spacing();
+        ImGui::TextUnformatted(I18n::Tr("画面分辨率"));
+        const char *res[] = {I18n::Tr("1080p  ·  标准"), I18n::Tr("1440p  ·  兼容模式"), I18n::Tr("4K  ·  原生 Pro"), I18n::Tr("4K  ·  兼容模式")};
         ImGui::SetNextItemWidth(-1);
         if (ImGui::Combo("##resolution", &settings.resolution, res, 4))
             dirty = true;
-        if (ImGui::Checkbox("全屏启动", &settings.fullscreen))
+        if (ImGui::Checkbox(I18n::Tr("全屏启动"), &settings.fullscreen))
             dirty = true;
         ImGui::SameLine();
-        if (ImGui::Checkbox("垂直同步", &settings.vsync))
+        if (ImGui::Checkbox(I18n::Tr("垂直同步"), &settings.vsync))
             dirty = true;
-        ImGui::TextUnformatted("显示帧率");
-        const char *fps[] = {"60 FPS", "120 FPS", "144 FPS", "165 FPS", "240 FPS", "不限", "自定义"};
+        ImGui::TextUnformatted(I18n::Tr("显示帧率"));
+        const char *fps[] = {"60 FPS", "120 FPS", "144 FPS", "165 FPS", "240 FPS", I18n::Tr("不限"), I18n::Tr("自定义")};
         ImGui::SetNextItemWidth(-1);
         if (ImGui::Combo("##refresh", &settings.refresh, fps, 7))
             dirty = true;
         if (settings.refresh == 6) {
-            ImGui::TextUnformatted("帧率上限（FPS）");
+            ImGui::TextUnformatted(I18n::Tr("帧率上限（FPS）"));
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputInt("##custom-refresh", &settings.custom_refresh)) {
                 dirty = true;
@@ -687,7 +715,7 @@ void Draw() {
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("30–1000 FPS");
         }
         int volume = int(settings.gain * 100 + .5f);
-        ImGui::TextUnformatted("主音量");
+        ImGui::TextUnformatted(I18n::Tr("主音量"));
         ImGui::SetNextItemWidth(-1);
         if (ImGui::SliderInt("##volume", &volume, 0, 400, "%d%%")) {
             settings.gain = volume / 100.f;
@@ -701,11 +729,11 @@ void Draw() {
     ImGui::EndChild();
     ImGui::SetCursorPosY(ImGui::GetWindowHeight() - ImGui::GetFrameHeight() -
                          ImGui::GetStyle().WindowPadding.y);
-    if (ImGui::Button("保存设置"))
+    if (ImGui::Button(I18n::Tr("保存设置")))
         Save();
     ImGui::SameLine();
-    ImGui::TextDisabled("%s", dirty            ? "有未保存的修改"
-                              : status.empty() ? "设置保存在本地"
+    ImGui::TextDisabled("%s", dirty            ? I18n::Tr("有未保存的修改")
+                              : status.empty() ? I18n::Tr("设置保存在本地")
                                                : status.c_str());
     ImGui::End();
     const float launch_height = std::max(h * (launching ? .30f : .16f), launching ? 300.f : 180.f);
@@ -718,7 +746,7 @@ void Draw() {
     ImGui::PushStyleColor(ImGuiCol_Button, {.83f, .43f, .13f, .97f});
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {1, .60f, .23f, 1});
     ImGui::BeginDisabled(importing || launching);
-    if (ImGui::Button(launching ? "正在准备…" : "开始游戏   >", {-1, ImGui::GetFontSize() * 2.8f}))
+    if (ImGui::Button(launching ? I18n::Tr("正在准备…") : I18n::Tr("开始游戏   >"), {-1, ImGui::GetFontSize() * 2.8f}))
         Start();
     ImGui::EndDisabled();
     ImGui::PopStyleColor(2);
@@ -726,7 +754,7 @@ void Draw() {
     if (launching) {
         auto check = Read(launch_output / "image/verification.ini");
         bool hashing = check["phase"] == "verify";
-        ImGui::TextWrapped("%s", hashing ? check["verification_mode"] == "first" ? "首次使用此目录，正在完整校验…" : "正在检查游戏文件的变化…" : "正在准备游戏…");
+        ImGui::TextWrapped("%s", hashing ? check["verification_mode"] == "first" ? I18n::Tr("首次使用此目录，正在完整校验…") : I18n::Tr("正在检查游戏文件的变化…") : I18n::Tr("正在准备游戏…"));
         if (hashing) {
             double bytes = std::strtod(check["bytes"].c_str(), nullptr),
                    total = std::strtod(check["total_bytes"].c_str(), nullptr);
@@ -734,14 +762,14 @@ void Draw() {
             ImGui::TextDisabled("%.2f / %.2f GB", bytes / 1e9, total / 1e9);
             ImGui::TextWrapped("%s", check["file"].c_str());
         }
-    } else ImGui::TextDisabled("F10 运行状态面板   /   支持手柄");
+    } else ImGui::TextDisabled(I18n::Tr("F10 运行状态面板   /   支持手柄"));
     ImGui::PopTextWrapPos();
     ImGui::End();
-    if (!launch_error.empty()) ImGui::OpenPopup("无法启动游戏");
+    if (!launch_error.empty()) ImGui::OpenPopup(I18n::Tr("无法启动游戏"));
     ImGui::SetNextWindowSize({std::min(w * .7f, 900.f), 0}, ImGuiCond_Appearing);
-    if (ImGui::BeginPopupModal("无法启动游戏", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal(I18n::Tr("无法启动游戏"), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("%s", launch_error.c_str());
-        if (ImGui::Button("确定")) { launch_error.clear(); ImGui::CloseCurrentPopup(); }
+        if (ImGui::Button(I18n::Tr("确定"))) { launch_error.clear(); ImGui::CloseCurrentPopup(); }
         ImGui::EndPopup();
     }
     ImGui::Render();
@@ -758,12 +786,16 @@ void Draw() {
 }
 int Main(int argc, char **argv) {
     SDL_SetMainReady();
+    // Detect a controller connected after the launcher opened, even while another window has
+    // focus; the game uses the same setting before it starts.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
         return 1;
     fs::path root = fs::u8path(SDL_GetBasePath());
     for (int i = 0; i < 5 && !fs::exists(root / "scripts/aegis_run.py"); ++i)
         root = root.parent_path();
     settings.Load(root);
+    I18n::SetLanguage(I18n::FromCode(settings.UiLanguage()));
     fs::current_path(root);
     fs::create_directories(root / "logs");
     const auto log_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -775,7 +807,8 @@ int Main(int argc, char **argv) {
 #else
     controller_log = std::fopen(controller_log_path.c_str(),"w");
 #endif
-    if (!controller_log) throw std::runtime_error("无法写入手柄诊断日志 / Cannot write controller diagnostics");
+    if (!controller_log)
+        throw std::runtime_error(I18n::Tr("无法写入手柄诊断日志 / Cannot write controller diagnostics"));
     pad_log_sdl(controller_log,"launcher");
     int width = 1920, height = 1080;
     for (int i = 1; i < argc; ++i) {
@@ -812,7 +845,7 @@ int Main(int argc, char **argv) {
 #endif
     renderer = SDL_CreateRenderer(window, drivers);
     if (!renderer) {
-        Error("无法创建硬件加速界面，请检查显卡驱动。");
+        Error(I18n::Tr("无法创建硬件加速界面，请检查显卡驱动。"));
         return 1;
     }
     SDL_SetRenderVSync(renderer, 1);
@@ -839,6 +872,10 @@ int Main(int argc, char **argv) {
     const UINT length = GetWindowsDirectoryW(windows_dir, MAX_PATH);
     if (length && length < MAX_PATH) {
         const auto directory = fs::path(windows_dir) / "Fonts";
+        // Traditional Chinese uses JhengHei when present, Simplified/English use YaHei.
+        if (I18n::Language() == I18n::Lang::ZhTW)
+            for (auto *name : {L"msjh.ttc", L"msjhbd.ttc", L"mingliu.ttc"})
+                fonts.push_back(directory / name);
         for (auto *name : {L"msyh.ttc", L"msyh.ttf", L"simhei.ttf", L"simsun.ttc"})
             fonts.push_back(directory / name);
     }
@@ -847,7 +884,13 @@ int Main(int argc, char **argv) {
 #endif
     for (const auto& font : fonts)
         if (fs::exists(font)) {
-            io.Fonts->AddFontFromFileTTF(Utf8(font).c_str(), 25);
+            ImFontConfig config;
+#ifndef _WIN32
+            // Noto Sans CJK is a collection: 0 JP, 1 HK, 2 KR, 3 SC, 4 TC.
+            config.FontNo = I18n::Language() == I18n::Lang::ZhTW ? 4 : 3;
+#endif
+            if (!io.Fonts->AddFontFromFileTTF(Utf8(font).c_str(), 25, &config))
+                io.Fonts->AddFontFromFileTTF(Utf8(font).c_str(), 25);
             break;
         }
     Theme(1);

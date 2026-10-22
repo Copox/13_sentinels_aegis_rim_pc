@@ -2,6 +2,8 @@ This project is only for running games you own on PC. Do not distribute pirated 
 本项目仅限在 PC 上运行自己拥有的游戏，不支持任何盗版传播行为。请支持正版。
 
 Open AegisLauncher.exe, select your own supported CUSA18093 game directory, configure options and start.
+The Launcher and Game language options follow the system by default: the interface can be Simplified
+Chinese, Traditional Chinese or English, and the game text Simplified Chinese, Traditional Chinese or Korean.
 The Game language option selects Simplified or Traditional Chinese text; restart the game to apply it. The directory must contain all six CPKs.
 The Import PKG tab accepts supported, already-decryptable packages; no retail decryption or update merging.
 Enter/F confirms, Space/Backspace cancels, WASD moves, arrows select, Esc opens the menu.
