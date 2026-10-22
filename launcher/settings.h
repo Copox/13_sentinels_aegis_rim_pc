@@ -249,10 +249,10 @@ struct Settings {
             ui_language = "auto";
         if (launcher.contains("game_language"))
             game_language = launcher["game_language"];
-        else if (runtime.contains("language"))
-            game_language = runtime["language"]; // migrate the old numeric setting once
+        else if (runtime.contains("language") && runtime["language"] != "11")
+            game_language = runtime["language"]; // keep an old explicit TW/KO choice
         else
-            game_language = "auto";
+            game_language = "auto"; // 11 was the old fixed default; it now follows the system
         if (game_language != "11" && game_language != "10" && game_language != "9")
             game_language = "auto";
     }
