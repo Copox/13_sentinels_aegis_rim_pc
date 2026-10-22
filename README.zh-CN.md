@@ -60,7 +60,7 @@ Windows 打开 `AegisLauncher.exe`，Linux 运行 `out/gpu/AegisLauncher`。
 选择分辨率、全屏、显示刷新、音量和输入映射，再开始游戏。
 游戏逻辑固定 60Hz。
 Enter/F 确认，Space/Backspace 返回，WASD 移动，方向键选择，Esc 打开菜单，
-Alt+Enter 切换全屏，F10 开关状态面板。SDL3 手柄支持热插拔。
+Alt+Enter 切换全屏，F10 开关状态面板。SDL3 手柄支持热插拔；已启用 Xbox／Switch Pro／Stadia 等常见驱动，未识别的摇杆会按标准位置 fallback。
 手柄映射页可开关 PC 新增的“主角机兵受伤震动”（默认开启）；仅战斗中实际扣血触发，
 敌人、召唤物和其他友方对象不会触发。设置与存档在 `user/` 中，请自行备份。
 

@@ -62,7 +62,8 @@ Simplified Chinese, Traditional Chinese or Korean. Choose resolution, fullscreen
 volume and input mappings, then start.
 Game logic stays at 60 Hz. Enter/F confirms; Space/Backspace cancels; WASD moves;
 arrow keys select; Esc opens the menu; Alt+Enter toggles fullscreen; F10 toggles statistics.
-SDL3 gamepads support hot-plugging. The gamepad tab also offers optional PC-added rumble
+SDL3 gamepads support hot-plugging; common Xbox, Switch Pro and Stadia drivers are enabled, and
+unrecognized sticks get a standard-position fallback. The gamepad tab also offers optional rumble
 when a protagonist mech loses HP in battle (enabled by default); enemies, summons and
 other friendly objects do not trigger it. Settings and saves are stored in `user/`; back it up.
 
