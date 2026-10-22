@@ -337,6 +337,14 @@ struct Settings {
     }
     void Save() {
         NormalizeFolder();
+        const auto available = AvailableGameLanguages();
+        if (!available.empty()) {
+            if (game_language != "auto" &&
+                !HasGameLanguage(std::stoi(game_language)))
+                game_language = "auto";
+            if (ui_language == "zh_TW" && !HasGameLanguage(10))
+                ui_language = "auto";
+        }
         runtime["render_resolution"] = Resolutions[resolution];
         runtime["render_mode"] = resolution == 2 ? "pro" : "base";
         runtime["audio_gain"] = std::to_string(gain);

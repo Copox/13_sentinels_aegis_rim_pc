@@ -598,6 +598,10 @@ void Draw() {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     auto &io = ImGui::GetIO();
+    // A game folder change or a missing pack can change the resolved language between frames.
+    const auto ui_language = I18n::FromCode(settings.UiLanguage());
+    if (ui_language != I18n::Language())
+        I18n::SetLanguage(ui_language);
     float w = io.DisplaySize.x, h = io.DisplaySize.y;
     auto *draw = ImGui::GetBackgroundDrawList();
     draw->AddRectFilledMultiColor({0, h * .25f}, {w, h}, 0x0010151c, 0x0010151c, 0xd9141b24,
