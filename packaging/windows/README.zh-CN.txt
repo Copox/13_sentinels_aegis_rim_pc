@@ -2,7 +2,7 @@
 This project is only for running games you own on PC. Do not distribute pirated games. Please support official releases.
 
 打开 AegisLauncher.exe，选择自己拥有的受支持 CUSA18093 游戏目录，设置选项后开始。
-“界面语言”和“游戏语言”默认跟随系统；界面可切换简中、繁中或 English，游戏文本可选简中、繁中或韩语。
+“界面语言”和“游戏语言”默认跟随系统；只显示游戏目录里实际存在的语言包（简中、繁中或韩语）。
 启动设置的“游戏语言”可选择简体中文或繁体中文，切换后重新启动游戏生效；目录需含全部六个 CPK。
 “导入 PKG”仅支持已经可解密的游戏包，不解密加密零售包，不合并更新。
 Enter/F 确认，Space/Backspace 返回，WASD 移动，方向键选择，Esc 打开菜单。

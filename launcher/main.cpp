@@ -375,6 +375,8 @@ void Controllers() {
         SDL_CloseGamepad(p);
     controllers.clear();
     rumble_message.clear();
+    pad_log_joysticks(controller_log,"launcher-devices");
+    pad_map_unknown_joysticks(controller_log);
     int n = 0;
     auto *ids = SDL_GetGamepads(&n);
     pad_log(controller_log,"launcher enumerate count=%d error=%s",n,ids ? "" : SDL_GetError());
@@ -656,17 +658,23 @@ void Draw() {
                                I18n::Tr("游戏目录不完整：需要 eboot.bin 与所选语言的 CPK"));
         ImGui::Spacing();
         ImGui::TextUnformatted(I18n::Tr("界面语言"));
-        const char *ui_languages[] = {I18n::Tr("跟随系统"), "简体中文", "繁體中文", "English"};
-        int ui_choice = settings.ui_language == "zh_CN"   ? 1
-                        : settings.ui_language == "zh_TW" ? 2
-                        : settings.ui_language == "en"    ? 3
-                                                          : 0;
+        const auto available_languages = settings.AvailableGameLanguages();
+        const bool can_traditional_ui =
+            available_languages.empty() || settings.HasGameLanguage(10);
+        std::vector<const char *> ui_languages{I18n::Tr("跟随系统"), "简体中文"};
+        std::vector<std::string> ui_codes{"auto", "zh_CN"};
+        if (can_traditional_ui) {
+            ui_languages.push_back("繁體中文");
+            ui_codes.push_back("zh_TW");
+        }
+        int ui_choice = 0;
+        for (size_t i = 0; i < ui_codes.size(); ++i)
+            if (settings.ui_language == ui_codes[i])
+                ui_choice = int(i);
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::Combo("##ui-language", &ui_choice, ui_languages, 4)) {
-            settings.ui_language = ui_choice == 1   ? "zh_CN"
-                                   : ui_choice == 2 ? "zh_TW"
-                                   : ui_choice == 3 ? "en"
-                                                    : "auto";
+        if (ImGui::Combo("##ui-language", &ui_choice, ui_languages.data(),
+                         int(ui_languages.size()))) {
+            settings.ui_language = ui_codes[ui_choice];
             I18n::SetLanguage(I18n::FromCode(settings.UiLanguage()));
             dirty = true;
         }
@@ -674,18 +682,30 @@ void Draw() {
             ImGui::SetTooltip(I18n::Tr("启动器界面语言；切换后立即生效"));
         ImGui::Spacing();
         ImGui::TextUnformatted(I18n::Tr("游戏语言"));
-        const char *game_languages[] = {I18n::Tr("跟随系统"), I18n::Tr("简体中文"),
-                                        I18n::Tr("繁体中文"), "한국어"};
-        int game_choice = settings.game_language == "11"   ? 1
-                          : settings.game_language == "10" ? 2
-                          : settings.game_language == "9"  ? 3
-                                                           : 0;
+        std::vector<const char *> game_languages{I18n::Tr("跟随系统")};
+        std::vector<int> game_values{0};
+        for (int code : {11, 10, 9}) {
+            if (!available_languages.empty() &&
+                std::find(available_languages.begin(), available_languages.end(), code) ==
+                    available_languages.end())
+                continue;
+            game_values.push_back(code);
+            game_languages.push_back(code == 11   ? I18n::Tr("简体中文")
+                                    : code == 10 ? I18n::Tr("繁体中文")
+                                                 : "한국어");
+        }
+        int game_choice = 0;
+        if (settings.game_language != "auto") {
+            const int current = std::stoi(settings.game_language);
+            for (size_t i = 0; i < game_values.size(); ++i)
+                if (game_values[i] == current)
+                    game_choice = int(i);
+        }
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::Combo("##game-language", &game_choice, game_languages, 4)) {
-            settings.game_language = game_choice == 1   ? "11"
-                                     : game_choice == 2 ? "10"
-                                     : game_choice == 3 ? "9"
-                                                        : "auto";
+        if (ImGui::Combo("##game-language", &game_choice, game_languages.data(),
+                         int(game_languages.size()))) {
+            settings.game_language =
+                game_values[game_choice] == 0 ? "auto" : std::to_string(game_values[game_choice]);
             dirty = true;
         }
         if (ImGui::IsItemHovered())
@@ -789,6 +809,7 @@ int Main(int argc, char **argv) {
     // Detect a controller connected after the launcher opened, even while another window has
     // focus; the game uses the same setting before it starts.
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    pad_set_compatibility_hints();
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
         return 1;
     fs::path root = fs::u8path(SDL_GetBasePath());

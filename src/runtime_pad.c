@@ -393,6 +393,7 @@ static SDL_Gamepad *current_gamepad(void) {
     const uint64_t now=now_us();
     if (!gamepad || (want && !on_preferred && now-last_scan>1000000)) {
         last_scan=now;
+        pad_map_unknown_joysticks(stdout);
         int count=0, pick=-1;
         SDL_JoystickID *ids=SDL_GetGamepads(&count);
         for (int i=0; want && ids && i<count && pick<0; ++i) if (is_preferred(ids[i],want)) pick=i;
@@ -1457,6 +1458,7 @@ static ABI int32_t pad_init(void) {
     pthread_mutex_lock(&lock);
     if (!initialized) {
         pad_log_sdl(stdout,"game");
+        pad_log_joysticks(stdout,"game-start");
         pad_log(stdout,"binding scePadSetVibration -> host pad_vibration -> SDL_RumbleGamepad; F8 tests both motors independently");
     }
     initialized=1;

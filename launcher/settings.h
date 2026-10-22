@@ -10,6 +10,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <vector>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -117,15 +118,13 @@ inline std::string SystemUiLanguage() {
     case 0x1004: // zh-SG
         return "zh_CN";
     default:
-        return "en";
+        return "zh_CN"; // English is not a game language; the launcher follows Chinese.
     }
 #else
     const std::string s = SystemLocale();
     if (s.rfind("zh_tw", 0) == 0 || s.rfind("zh_hk", 0) == 0 || s.rfind("zh_mo", 0) == 0)
         return "zh_TW";
-    if (s.rfind("zh", 0) == 0)
-        return "zh_CN";
-    return "en";
+    return "zh_CN";
 #endif
 }
 // The game's text language follows the same locale: 9 Korean, 10 Traditional, 11 Simplified.
@@ -168,17 +167,55 @@ struct Settings {
         auto p = fs::u8path(folder);
         return (p.is_absolute() ? p : root / p).lexically_normal();
     }
+    // The languages whose base and patch CPKs are present. CN is the shared base, TW and KO
+    // are overlays; a missing patch would fail at launch, so both files are required.
+    std::vector<int> AvailableGameLanguages() const {
+        std::vector<int> available;
+        auto p = GamePath();
+        std::error_code ec;
+        auto has = [&](const char *data, const char *patch) {
+            return fs::is_regular_file(p / data, ec) &&
+                   fs::is_regular_file(p / patch, ec);
+        };
+        if (has("ROBO_CN.CPK", "ROBO_PATCH2_CN.CPK"))
+            available.push_back(11);
+        if (has("ROBO_TW.CPK", "ROBO_PATCH2_TW.CPK"))
+            available.push_back(10);
+        if (has("ROBO_KO.CPK", "ROBO_PATCH2_KO.CPK"))
+            available.push_back(9);
+        return available;
+    }
+    bool HasGameLanguage(int code) const {
+        const auto available = AvailableGameLanguages();
+        return std::find(available.begin(), available.end(), code) != available.end();
+    }
     std::string UiLanguage() const {
-        return ui_language == "auto" ? SystemUiLanguage() : ui_language;
+        std::string code = ui_language == "auto" ? SystemUiLanguage() : ui_language;
+        if (code == "en")
+            code = "zh_CN"; // the English UI option was removed; old settings migrate here
+        // Traditional Chinese UI is only offered when its game pack is present.
+        if (code == "zh_TW" && !AvailableGameLanguages().empty() && !HasGameLanguage(10))
+            code = "zh_CN";
+        return code;
     }
     int GameLanguage() const {
+        int code = 11;
         if (game_language == "10")
-            return 10;
-        if (game_language == "9")
-            return 9;
-        if (game_language == "11")
+            code = 10;
+        else if (game_language == "9")
+            code = 9;
+        else if (game_language == "11")
+            code = 11;
+        else
+            code = SystemGameLanguage();
+        const auto available = AvailableGameLanguages();
+        if (available.empty())
+            return code; // no game directory yet: keep the preference until one is chosen
+        if (std::find(available.begin(), available.end(), code) != available.end())
+            return code;
+        if (std::find(available.begin(), available.end(), 11) != available.end())
             return 11;
-        return SystemGameLanguage();
+        return available.front();
     }
     void NormalizeFolder() {
         if (folder.empty())
@@ -245,7 +282,8 @@ struct Settings {
         if (!runtime.contains("audio_mix_version") && gain == 2)
             gain = 1; // Retire the old automatic 200% compensation once.
         ui_language = launcher.contains("ui_language") ? launcher["ui_language"] : "auto";
-        if (ui_language != "zh_CN" && ui_language != "zh_TW" && ui_language != "en")
+        // "en" is an old option from the previous build; the English UI is gone.
+        if (ui_language != "zh_CN" && ui_language != "zh_TW" && ui_language != "auto")
             ui_language = "auto";
         if (launcher.contains("game_language"))
             game_language = launcher["game_language"];
@@ -255,6 +293,13 @@ struct Settings {
             game_language = "auto"; // 11 was the old fixed default; it now follows the system
         if (game_language != "11" && game_language != "10" && game_language != "9")
             game_language = "auto";
+        const auto available = AvailableGameLanguages();
+        if (!available.empty()) {
+            if (game_language != "auto" && !HasGameLanguage(std::stoi(game_language)))
+                game_language = "auto";
+            if (ui_language == "zh_TW" && !HasGameLanguage(10))
+                ui_language = "auto";
+        }
     }
     std::string Binding(int i, bool pad) const {
         std::string k = std::string(pad ? "pad." : "key.") + Actions[i].id;
@@ -285,17 +330,10 @@ struct Settings {
             return false;
         auto p = GamePath();
         std::error_code ec;
+        if (!fs::is_regular_file(p / "eboot.bin", ec) || !HasGameLanguage(11))
+            return false;
         const int language = GameLanguage();
-        bool ok = fs::is_regular_file(p / "eboot.bin", ec) &&
-                  fs::is_regular_file(p / "ROBO_CN.CPK", ec) &&
-                  fs::is_regular_file(p / "ROBO_PATCH2_CN.CPK", ec);
-        if (language == 10)
-            ok = ok && fs::is_regular_file(p / "ROBO_TW.CPK", ec) &&
-                 fs::is_regular_file(p / "ROBO_PATCH2_TW.CPK", ec);
-        else if (language == 9)
-            ok = ok && fs::is_regular_file(p / "ROBO_KO.CPK", ec) &&
-                 fs::is_regular_file(p / "ROBO_PATCH2_KO.CPK", ec);
-        return ok;
+        return language == 11 || HasGameLanguage(language);
     }
     void Save() {
         NormalizeFolder();

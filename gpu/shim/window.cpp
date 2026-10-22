@@ -14,6 +14,7 @@
 #include "bbport_frame_rate.h"
 #include "bbport_overlay.h"
 #include "bbport_settings.h"
+#include "../../src/pad_diagnostics.h"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -163,6 +164,7 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     // A pad connected after launch must work even if the window is not focused yet (loading,
     // alt-tab): SDL otherwise keeps its button state at zero until focus returns.
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    pad_set_compatibility_hints();
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
